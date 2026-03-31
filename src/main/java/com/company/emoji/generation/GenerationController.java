@@ -37,7 +37,10 @@ public class GenerationController {
     public ResponseEntity<ApiResponse<CreateGenerationResponse>> createGeneration(
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @Valid @RequestBody CreateGenerationRequest request) {
-        return ResponseEntity.accepted().body(ApiResponse.ok(generationService.create(request, idempotencyKey), TraceIdContext.currentTraceId()));
+        String currentUserId = currentUserContext.getCurrentUser()
+                .map(AuthenticatedUser::userId)
+                .orElse(null);
+        return ResponseEntity.accepted().body(ApiResponse.ok(generationService.create(currentUserId, request, idempotencyKey), TraceIdContext.currentTraceId()));
     }
 
     @GetMapping("/generations/{taskId}")

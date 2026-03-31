@@ -11,6 +11,7 @@ The current implementation keeps the URL, method, core DTOs, and response envelo
 - Public endpoints remain open for bootstrap, auth, template browsing, upload policy, generation create/detail, and IAP verify.
 - Protected endpoints now require a valid access token. Missing or invalid bearer token returns `401`; authenticated but disallowed access returns `403`.
 - Email login and Apple login now create or reuse a persisted user record on the server side.
+- Generation tasks are now persisted. Authenticated requests are attached to the current user; anonymous requests remain queryable by task ID but are not included in protected history APIs.
 
 ## Response envelope
 
@@ -166,6 +167,7 @@ Response fields:
 - `taskId`
 - `status`
 - `pollAfterSeconds`
+- authenticated requests persist the task under the current user when a bearer token is present
 
 ### GET `/api/generations/{taskId}`
 Response fields:
@@ -187,6 +189,7 @@ Response fields:
   - `status`
   - `coverUrl`
   - `createdAt`
+- only includes non-deleted tasks owned by the current authenticated user
 
 ### DELETE `/api/history/{id}`
 Authentication:
@@ -195,6 +198,7 @@ Authentication:
 Response fields:
 - `deleted`
 - `historyId`
+- deletes are implemented as a soft-delete flag on the persisted task
 
 ### POST `/api/iap/verify`
 Request fields:
