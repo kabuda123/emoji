@@ -12,6 +12,7 @@ import com.company.emoji.generation.dto.HistoryItemResponse;
 import com.company.emoji.generation.dto.InternalGenerationStatusUpdateRequest;
 import com.company.emoji.generation.entity.GenerationTaskEntity;
 import com.company.emoji.media.MediaAssetService;
+import com.company.emoji.media.MediaMetadataService;
 import com.company.emoji.template.TemplateRepository;
 import com.company.emoji.template.entity.StyleTemplateEntity;
 import com.company.emoji.user.UserAccountService;
@@ -30,17 +31,20 @@ public class GenerationService {
     private final UserAccountService userAccountService;
     private final GenerationTaskRepository generationTaskRepository;
     private final MediaAssetService mediaAssetService;
+    private final MediaMetadataService mediaMetadataService;
     private final TemplateRepository templateRepository;
 
     public GenerationService(
             UserAccountService userAccountService,
             GenerationTaskRepository generationTaskRepository,
             MediaAssetService mediaAssetService,
+            MediaMetadataService mediaMetadataService,
             TemplateRepository templateRepository
     ) {
         this.userAccountService = userAccountService;
         this.generationTaskRepository = generationTaskRepository;
         this.mediaAssetService = mediaAssetService;
+        this.mediaMetadataService = mediaMetadataService;
         this.templateRepository = templateRepository;
     }
 
@@ -174,6 +178,7 @@ public class GenerationService {
         task.setCreatedAt(now);
         task.setUpdatedAt(now);
         generationTaskRepository.save(task);
+        mediaMetadataService.attachSourceToTask(userId, task.getId(), request.inputObjectKey());
         return toCreateResponse(task);
     }
 

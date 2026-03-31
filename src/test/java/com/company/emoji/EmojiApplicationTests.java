@@ -1,8 +1,12 @@
 package com.company.emoji;
 
 import com.company.emoji.auth.JwtTokenService;
+import com.company.emoji.audit.AuditEventRepository;
+import com.company.emoji.audit.entity.AuditEventEntity;
 import com.company.emoji.generation.GenerationTaskRepository;
 import com.company.emoji.generation.entity.GenerationTaskEntity;
+import com.company.emoji.media.MediaAssetRepository;
+import com.company.emoji.media.entity.MediaAssetEntity;
 import com.company.emoji.user.UserRepository;
 import com.company.emoji.user.entity.AppUserEntity;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -21,6 +25,7 @@ import java.time.Instant;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -50,6 +55,12 @@ class EmojiApplicationTests {
     @Autowired
     private GenerationTaskRepository generationTaskRepository;
 
+    @Autowired
+    private MediaAssetRepository mediaAssetRepository;
+
+    @Autowired
+    private AuditEventRepository auditEventRepository;
+
     @Test
     void bootstrapShouldReturnEnvelope() throws Exception {
         mockMvc.perform(get("/api/config/bootstrap"))
@@ -71,7 +82,7 @@ class EmojiApplicationTests {
 
     @Test
     void uploadPolicyShouldGenerateManagedSourceObjectKey() throws Exception {
-        mockMvc.perform(post("/api/upload/policy")
+        MvcResult result = mockMvc.perform(post("/api/upload/policy")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -83,7 +94,13 @@ class EmojiApplicationTests {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.objectKey").value(org.hamcrest.Matchers.startsWith("emoji/source/")))
                 .andExpect(jsonPath("$.data.uploadUrl").value(org.hamcrest.Matchers.startsWith("https://files.example.com/emoji/source/")))
-                .andExpect(jsonPath("$.data.headers.Content-Type").value("image/png"));
+                .andExpect(jsonPath("$.data.headers.Content-Type").value("image/png"))
+                .andReturn();
+
+        String objectKey = responseValue(result, "/data/objectKey");
+        MediaAssetEntity asset = mediaAssetRepository.findByObjectKey(objectKey).orElseThrow();
+        assertThat(asset.getAssetRole()).isEqualTo("SOURCE");
+        assertThat(asset.getSourceStatus()).isEqualTo("POLICY_ISSUED");
     }
 
     @Test
@@ -265,6 +282,10 @@ class EmojiApplicationTests {
         AppUserEntity user = userRepository.findById(CURRENT_USER_ID).orElseThrow();
         assertThat(user.getAvailableCredits()).isEqualTo(228);
         assertThat(user.getFrozenCredits()).isEqualTo(12);
+
+        MediaAssetEntity sourceAsset = mediaAssetRepository.findByObjectKey(sourceObjectKey("auth-input.png")).orElseThrow();
+        assertThat(sourceAsset.getGenerationTaskId()).isEqualTo(taskId);
+        assertThat(sourceAsset.getSourceStatus()).isEqualTo("ATTACHED");
     }
 
     @Test
@@ -490,6 +511,9 @@ class EmojiApplicationTests {
 
         GenerationTaskEntity task = generationTaskRepository.findByIdAndDeletedFalse("task_dispatch_2").orElseThrow();
         assertThat(task.getProviderTaskId()).isEqualTo("mock_task_dispatch_2");
+        assertThat(auditEventRepository.findAllByGenerationTaskIdOrderByCreatedAtAsc("task_dispatch_2"))
+                .extracting(AuditEventEntity::getEventType)
+                .contains("GENERATION_DISPATCHED");
     }
 
     @Test
@@ -558,6 +582,16 @@ class EmojiApplicationTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("SUCCESS"))
                 .andExpect(jsonPath("$.data.resultUrls[0]").value("https://files.example.com/emoji/generated/results/mock_" + taskId + "-1.png"));
+
+        assertThat(mediaAssetRepository.findAllByGenerationTaskIdOrderByCreatedAtAsc(taskId))
+                .extracting(MediaAssetEntity::getAssetRole, MediaAssetEntity::getObjectKey)
+                .contains(
+                        tuple("PREVIEW", "emoji/generated/previews/mock_" + taskId + "-1.png"),
+                        tuple("RESULT", "emoji/generated/results/mock_" + taskId + "-1.png")
+                );
+        assertThat(auditEventRepository.findAllByGenerationTaskIdOrderByCreatedAtAsc(taskId))
+                .extracting(AuditEventEntity::getEventType)
+                .contains("GENERATION_DISPATCHED", "PROVIDER_WEBHOOK_RECEIVED");
     }
 
     @Test

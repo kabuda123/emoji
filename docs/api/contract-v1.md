@@ -16,6 +16,7 @@ The current implementation keeps the URL, method, core DTOs, and response envelo
 - Authenticated generation requests now reserve template credits at creation time. `SUCCESS` confirms the deduction; `FAILED` and `REFUNDED` release the reserved amount back to the user account.
 - Mock provider dispatch and webhook skeleton are now available for end-to-end integration testing.
 - Media handling now uses managed object keys. Public APIs return resolved URLs while internal/provider flows may pass storage object keys.
+- Source uploads, generated assets, and provider callbacks are now persisted as metadata/audit records for traceability.
 
 ## Response envelope
 

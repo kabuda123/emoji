@@ -1,5 +1,6 @@
 package com.company.emoji.generation;
 
+import com.company.emoji.audit.AuditEventService;
 import com.company.emoji.common.api.ApiErrorCode;
 import com.company.emoji.common.api.ApiException;
 import com.company.emoji.generation.domain.GenerationStatus;
@@ -9,6 +10,7 @@ import com.company.emoji.generation.entity.GenerationTaskEntity;
 import com.company.emoji.generation.provider.GenerationProviderAdapter;
 import com.company.emoji.generation.provider.ProviderDispatchRequest;
 import com.company.emoji.generation.provider.ProviderDispatchResponse;
+import com.company.emoji.media.MediaMetadataService;
 import com.company.emoji.template.TemplateRepository;
 import com.company.emoji.template.entity.StyleTemplateEntity;
 import org.springframework.http.HttpStatus;
@@ -21,17 +23,23 @@ public class GenerationDispatchService {
     private final TemplateRepository templateRepository;
     private final GenerationProviderAdapter generationProviderAdapter;
     private final GenerationService generationService;
+    private final AuditEventService auditEventService;
+    private final MediaMetadataService mediaMetadataService;
 
     public GenerationDispatchService(
             GenerationTaskRepository generationTaskRepository,
             TemplateRepository templateRepository,
             GenerationProviderAdapter generationProviderAdapter,
-            GenerationService generationService
+            GenerationService generationService,
+            AuditEventService auditEventService,
+            MediaMetadataService mediaMetadataService
     ) {
         this.generationTaskRepository = generationTaskRepository;
         this.templateRepository = templateRepository;
         this.generationProviderAdapter = generationProviderAdapter;
         this.generationService = generationService;
+        this.auditEventService = auditEventService;
+        this.mediaMetadataService = mediaMetadataService;
     }
 
     @Transactional
@@ -51,6 +59,21 @@ public class GenerationDispatchService {
                 task.getInputObjectKey(),
                 task.getRequestedCount()
         ));
+
+        auditEventService.record(
+                "GENERATION_DISPATCHED",
+                "SYSTEM",
+                task.getId(),
+                response.providerTaskId(),
+                "provider=" + generationProviderAdapter.providerCode() + ";previewCount=" + response.previewUrls().size()
+        );
+        mediaMetadataService.recordGeneratedAssets(
+                task.getId(),
+                task.getUserId(),
+                response.providerTaskId(),
+                response.previewUrls(),
+                null
+        );
 
         return generationService.updateStatus(taskId, new InternalGenerationStatusUpdateRequest(
                 GenerationStatus.RUNNING,
