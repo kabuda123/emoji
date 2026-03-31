@@ -1,6 +1,40 @@
 spring:
-  autoconfigure:
-    exclude:
-      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
-      - org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration
-      - org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration
+  datasource:
+    url: jdbc:h2:mem:emoji;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  data:
+    redis:
+      repositories:
+        enabled: false
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+app:
+  auth:
+    jwt-secret: test-secret-value-with-at-least-thirty-two-characters
+    access-token-ttl-seconds: 7200
+    refresh-token-ttl-seconds: 2592000
+    email-code-ttl-seconds: 300
+    fixed-email-code-for-dev: 123456
+  bootstrap:
+    product-name: Original Style Emoji Tool
+    ios-review-mode: false
+    iap-enabled: true
+    supported-login-methods: APPLE,EMAIL
+    privacy-url: https://example.com/privacy
+    terms-url: https://example.com/terms
+    ai-auth-url: https://example.com/ai-auth
+    generation-min-images: 2
+    generation-max-images: 4
+    generation-poll-seconds: 5
+  media:
+    public-upload-base-url: https://files.example.com
+    upload-path-prefix: emoji
+    upload-expires-in-seconds: 900

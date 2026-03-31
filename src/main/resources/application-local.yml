@@ -7,3 +7,9 @@ spring:
     redis:
       host: localhost
       port: 6379
+
+app:
+  auth:
+    fixed-email-code-for-dev: 123456
+  media:
+    public-upload-base-url: http://localhost:9000/mock-upload

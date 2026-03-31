@@ -1,4 +1,17 @@
 # API Docs
 
-This directory will contain the REST contract used by the iOS app and backend.
-Start with authentication, upload, template, generation, history, credits, and IAP endpoints.
+This directory contains the first backend contract used by the iOS client.
+
+## Current version
+- `contract-v1.md`: initial REST contract and placeholder payloads for MVP parallel development.
+
+## Scope
+- Auth
+- Account
+- Bootstrap config
+- Upload policy
+- Template list/detail
+- Generation create/detail
+- History list/delete
+- IAP verify
+- Credits balance

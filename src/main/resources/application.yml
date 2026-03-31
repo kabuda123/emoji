@@ -11,6 +11,10 @@ spring:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
   flyway:
     enabled: true
     locations: classpath:db/migration
@@ -27,3 +31,26 @@ management:
 logging:
   pattern:
     level: "%5p [traceId:%X{traceId:-na}]"
+
+app:
+  auth:
+    jwt-secret: ${APP_AUTH_JWT_SECRET:change-this-dev-secret-to-a-32-char-minimum-value}
+    access-token-ttl-seconds: ${APP_AUTH_ACCESS_TTL_SECONDS:7200}
+    refresh-token-ttl-seconds: ${APP_AUTH_REFRESH_TTL_SECONDS:2592000}
+    email-code-ttl-seconds: ${APP_AUTH_EMAIL_CODE_TTL_SECONDS:300}
+    fixed-email-code-for-dev:
+  bootstrap:
+    product-name: ${APP_BOOTSTRAP_PRODUCT_NAME:Original Style Emoji Tool}
+    ios-review-mode: ${APP_BOOTSTRAP_IOS_REVIEW_MODE:false}
+    iap-enabled: ${APP_BOOTSTRAP_IAP_ENABLED:true}
+    supported-login-methods: ${APP_BOOTSTRAP_LOGIN_METHODS:APPLE,EMAIL}
+    privacy-url: ${APP_BOOTSTRAP_PRIVACY_URL:https://example.com/privacy}
+    terms-url: ${APP_BOOTSTRAP_TERMS_URL:https://example.com/terms}
+    ai-auth-url: ${APP_BOOTSTRAP_AI_AUTH_URL:https://example.com/ai-auth}
+    generation-min-images: ${APP_BOOTSTRAP_GENERATION_MIN_IMAGES:2}
+    generation-max-images: ${APP_BOOTSTRAP_GENERATION_MAX_IMAGES:4}
+    generation-poll-seconds: ${APP_BOOTSTRAP_GENERATION_POLL_SECONDS:5}
+  media:
+    public-upload-base-url: ${APP_MEDIA_PUBLIC_UPLOAD_BASE_URL:https://files.example.com}
+    upload-path-prefix: ${APP_MEDIA_UPLOAD_PATH_PREFIX:emoji}
+    upload-expires-in-seconds: ${APP_MEDIA_UPLOAD_EXPIRES_IN_SECONDS:900}
