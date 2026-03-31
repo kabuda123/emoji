@@ -248,6 +248,35 @@ class EmojiApplicationTests {
     }
 
     @Test
+    void creditLedgerShouldRequireAuthenticatedUser() throws Exception {
+        mockMvc.perform(get("/api/credits/ledger"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
+    }
+
+    @Test
+    void creditLedgerShouldReturnCurrentUserEntries() throws Exception {
+        persistUser(CURRENT_USER_ID, "EMAIL", CURRENT_USER_EMAIL, 240, 0, "ACTIVE");
+
+        String taskId = createAuthenticatedTask("comic", "uploads/demo/ledger-user.png");
+        postInternalStatus(taskId, """
+                {
+                  "status": "FAILED",
+                  "failedReason": "ledger test release"
+                }
+                """).andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/credits/ledger")
+                        .header("Authorization", bearerToken()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.total").value(org.hamcrest.Matchers.greaterThanOrEqualTo(2)))
+                .andExpect(jsonPath("$.data.entries[0].entryType").isString())
+                .andExpect(jsonPath("$.data.entries[*].generationTaskId").value(org.hamcrest.Matchers.hasItem(taskId)));
+    }
+
+    @Test
     void verifyIapShouldRequireAuthenticatedUser() throws Exception {
         mockMvc.perform(post("/api/iap/verify")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -337,6 +366,30 @@ class EmojiApplicationTests {
                 .extracting(AuditEventEntity::getEventType)
                 .contains("IAP_VERIFIED", "IAP_VERIFY_REPLAYED");
         assertThat(creditLedgerRepository.findAllByIapOrderIdOrderByCreatedAtAsc(orderId)).hasSize(1);
+    }
+
+    @Test
+    void internalCreditLedgerShouldRequireFilter() throws Exception {
+        mockMvc.perform(get("/api/internal/admin/credits/ledger")
+                        .header("X-Internal-Token", INTERNAL_API_TOKEN))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
+    void internalCreditLedgerShouldSupportTaskFilter() throws Exception {
+        persistUser(CURRENT_USER_ID, "EMAIL", CURRENT_USER_EMAIL, 240, 0, "ACTIVE");
+        String taskId = createAuthenticatedTask("comic", "uploads/demo/ledger-admin.png");
+
+        mockMvc.perform(get("/api/internal/admin/credits/ledger")
+                        .header("X-Internal-Token", INTERNAL_API_TOKEN)
+                        .param("generationTaskId", taskId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.total").value(org.hamcrest.Matchers.greaterThanOrEqualTo(1)))
+                .andExpect(jsonPath("$.data.entries[*].generationTaskId").value(org.hamcrest.Matchers.everyItem(org.hamcrest.Matchers.is(taskId))))
+                .andExpect(jsonPath("$.data.entries[*].entryType").value(org.hamcrest.Matchers.hasItem("GENERATION_RESERVE")));
     }
 
     @Test

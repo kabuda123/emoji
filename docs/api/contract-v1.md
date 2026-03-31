@@ -65,6 +65,7 @@ Error:
 - `GET /api/history`
 - `DELETE /api/history/{id}`
 - `GET /api/credits/balance`
+- `GET /api/credits/ledger`
 - `POST /api/account/delete`
 - `POST /api/iap/verify`
 
@@ -307,3 +308,39 @@ Response fields:
 - current skeleton reads these values from persisted user account fields
 - `frozenCredits` reflects reserved generation spend not yet settled
 - all balance-changing operations are also written to the internal credit ledger
+
+### GET `/api/credits/ledger`
+Authentication:
+- access token required
+
+Response fields:
+- `entries`
+- `total`
+
+Entry fields:
+- `entryId`
+- `entryType`
+- `availableDelta`
+- `frozenDelta`
+- `balanceAfterAvailable`
+- `balanceAfterFrozen`
+- `generationTaskId`
+- `iapOrderId`
+- `description`
+- `createdAt`
+
+Behavior:
+- returns the current authenticated user's credit ledger entries in reverse chronological order
+
+### GET `/api/internal/admin/credits/ledger`
+Authentication:
+- internal header `X-Internal-Token` required
+
+Query parameters:
+- `userId`: optional
+- `generationTaskId`: optional
+- `iapOrderId`: optional
+
+Behavior:
+- requires at least one filter
+- returns matching ledger entries for internal support and admin use
