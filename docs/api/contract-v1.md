@@ -1,14 +1,15 @@
 # API Contract v1
 
 This document defines the first stable contract between the iOS client and the backend skeleton.
-The current implementation returns placeholder data but keeps the URL, method, core DTOs, and response envelope stable.
+The current implementation keeps the URL, method, core DTOs, and response envelope stable.
 
 ## Base rules
 - Base path: `/api`
 - Content type: `application/json`
 - Authentication: bearer token in `Authorization: Bearer <token>`
 - Idempotent create endpoints may send `Idempotency-Key`
-- Current skeleton keeps all endpoints open for local integration; real auth enforcement will follow later.
+- Public endpoints remain open for bootstrap, auth, template browsing, upload policy, generation create/detail, and IAP verify.
+- Protected endpoints now require a valid access token. Missing or invalid bearer token returns `401`; authenticated but disallowed access returns `403`.
 
 ## Response envelope
 
@@ -45,9 +46,16 @@ Error:
 ## Error codes
 - `VALIDATION_ERROR`
 - `UNAUTHORIZED`
+- `FORBIDDEN`
 - `NOT_FOUND`
 - `CONFLICT`
 - `INTERNAL_ERROR`
+
+## Protected endpoints
+- `GET /api/history`
+- `DELETE /api/history/{id}`
+- `GET /api/credits/balance`
+- `POST /api/account/delete`
 
 ## Domain enums
 - `GenerationStatus`: `CREATED`, `AUDITING`, `READY_TO_DISPATCH`, `RUNNING`, `POST_PROCESSING`, `SUCCESS`, `FAILED`, `REFUNDED`
@@ -88,6 +96,9 @@ Response fields:
 - `isNewUser`
 
 ### POST `/api/account/delete`
+Authentication:
+- access token required
+
 Request fields:
 - `reason`: string, optional
 - `confirmText`: string, optional
@@ -163,6 +174,9 @@ Response fields:
 - `failedReason`
 
 ### GET `/api/history`
+Authentication:
+- access token required
+
 Response fields:
 - array of history items:
   - `taskId`
@@ -172,6 +186,9 @@ Response fields:
   - `createdAt`
 
 ### DELETE `/api/history/{id}`
+Authentication:
+- access token required
+
 Response fields:
 - `deleted`
 - `historyId`
@@ -189,6 +206,9 @@ Response fields:
 - `balanceAfter`
 
 ### GET `/api/credits/balance`
+Authentication:
+- access token required
+
 Response fields:
 - `availableCredits`
 - `frozenCredits`

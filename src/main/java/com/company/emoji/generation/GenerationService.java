@@ -40,14 +40,14 @@ public class GenerationService {
         );
     }
 
-    public List<HistoryItemResponse> listHistory() {
+    public List<HistoryItemResponse> listHistory(String userId) {
         return List.of(
-                new HistoryItemResponse("task_demo_1", "漫画风", GenerationStatus.SUCCESS, "https://example.com/history/task_demo_1-cover.png", Instant.now()),
-                new HistoryItemResponse("task_demo_2", "贴纸风", GenerationStatus.RUNNING, "https://example.com/history/task_demo_2-cover.png", Instant.now().minusSeconds(600))
+                new HistoryItemResponse("task_" + userId + "_1", "Comic Style", GenerationStatus.SUCCESS, "https://example.com/history/task_demo_1-cover.png", Instant.now()),
+                new HistoryItemResponse("task_" + userId + "_2", "Sticker Style", GenerationStatus.RUNNING, "https://example.com/history/task_demo_2-cover.png", Instant.now().minusSeconds(600))
         );
     }
 
-    public DeleteHistoryResponse deleteHistory(String historyId) {
-        return new DeleteHistoryResponse(true, historyId);
+    public DeleteHistoryResponse deleteHistory(String userId, String historyId) {
+        return new DeleteHistoryResponse(true, historyId + "@" + userId);
     }
 }

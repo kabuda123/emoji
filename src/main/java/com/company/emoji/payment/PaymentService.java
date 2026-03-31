@@ -12,7 +12,8 @@ public class PaymentService {
         return new VerifyIapResponse("iap_order_demo", "VERIFIED", 120, 240);
     }
 
-    public CreditBalanceResponse getBalance() {
-        return new CreditBalanceResponse(240, 0, "CREDITS");
+    public CreditBalanceResponse getBalance(String userId) {
+        int personalizedBalance = 240 + Math.floorMod(userId.hashCode(), 50);
+        return new CreditBalanceResponse(personalizedBalance, 0, "CREDITS");
     }
 }

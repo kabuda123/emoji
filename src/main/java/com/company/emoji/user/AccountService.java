@@ -10,7 +10,7 @@ import java.time.temporal.ChronoUnit;
 @Service
 public class AccountService {
 
-    public DeleteAccountResponse requestDeletion(DeleteAccountRequest request) {
+    public DeleteAccountResponse requestDeletion(String userId, DeleteAccountRequest request) {
         return new DeleteAccountResponse("SCHEDULED", Instant.now().plus(7, ChronoUnit.DAYS));
     }
 }

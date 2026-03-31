@@ -1,5 +1,7 @@
 package com.company.emoji.payment;
 
+import com.company.emoji.auth.AuthenticatedUser;
+import com.company.emoji.auth.CurrentUserContext;
 import com.company.emoji.common.api.ApiResponse;
 import com.company.emoji.common.api.TraceIdContext;
 import com.company.emoji.payment.dto.CreditBalanceResponse;
@@ -17,9 +19,11 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api")
 public class PaymentController {
     private final PaymentService paymentService;
+    private final CurrentUserContext currentUserContext;
 
-    public PaymentController(PaymentService paymentService) {
+    public PaymentController(PaymentService paymentService, CurrentUserContext currentUserContext) {
         this.paymentService = paymentService;
+        this.currentUserContext = currentUserContext;
     }
 
     @PostMapping("/iap/verify")
@@ -29,6 +33,7 @@ public class PaymentController {
 
     @GetMapping("/credits/balance")
     public ResponseEntity<ApiResponse<CreditBalanceResponse>> getCreditsBalance() {
-        return ResponseEntity.ok(ApiResponse.ok(paymentService.getBalance(), TraceIdContext.currentTraceId()));
+        AuthenticatedUser currentUser = currentUserContext.requireCurrentUser();
+        return ResponseEntity.ok(ApiResponse.ok(paymentService.getBalance(currentUser.userId()), TraceIdContext.currentTraceId()));
     }
 }

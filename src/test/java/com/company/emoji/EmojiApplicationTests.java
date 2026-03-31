@@ -1,5 +1,6 @@
 package com.company.emoji;
 
+import com.company.emoji.auth.JwtTokenService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -8,6 +9,9 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.util.Map;
+
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -21,6 +25,9 @@ class EmojiApplicationTests {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @Autowired
+    private JwtTokenService jwtTokenService;
 
     @Test
     void bootstrapShouldReturnEnvelope() throws Exception {
@@ -90,5 +97,60 @@ class EmojiApplicationTests {
                 .andExpect(jsonPath("$.data.userId").exists())
                 .andExpect(jsonPath("$.data.accessToken").isString())
                 .andExpect(jsonPath("$.data.refreshToken").isString());
+    }
+
+    @Test
+    void historyShouldRejectAnonymousAccess() throws Exception {
+        mockMvc.perform(get("/api/history"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
+    }
+
+    @Test
+    void historyShouldAcceptValidBearerToken() throws Exception {
+        mockMvc.perform(get("/api/history")
+                        .header("Authorization", bearerToken()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data[0].taskId").value("task_usr_test_123_1"));
+    }
+
+    @Test
+    void creditsBalanceShouldRejectMalformedBearerToken() throws Exception {
+        mockMvc.perform(get("/api/credits/balance")
+                        .header("Authorization", "Bearer broken-token"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
+    }
+
+    @Test
+    void deleteAccountShouldRequireValidBearerToken() throws Exception {
+        mockMvc.perform(post("/api/account/delete")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", bearerToken())
+                        .content("""
+                                {
+                                  "reason": "no longer needed",
+                                  "confirmText": "DELETE"
+                                }
+                                """))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.status").value("SCHEDULED"));
+    }
+
+    @Test
+    void deleteHistoryShouldReturnUserScopedIdentifier() throws Exception {
+        mockMvc.perform(delete("/api/history/task_demo_1")
+                        .header("Authorization", bearerToken()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.historyId").value("task_demo_1@usr_test_123"));
+    }
+
+    private String bearerToken() {
+        return "Bearer " + jwtTokenService.issueAccessToken("usr_test_123", Map.of("provider", "EMAIL", "email", "demo@example.com"));
     }
 }

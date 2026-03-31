@@ -1,5 +1,7 @@
 package com.company.emoji.generation;
 
+import com.company.emoji.auth.AuthenticatedUser;
+import com.company.emoji.auth.CurrentUserContext;
 import com.company.emoji.common.api.ApiResponse;
 import com.company.emoji.common.api.TraceIdContext;
 import com.company.emoji.generation.dto.CreateGenerationRequest;
@@ -24,9 +26,11 @@ import java.util.List;
 @RequestMapping("/api")
 public class GenerationController {
     private final GenerationService generationService;
+    private final CurrentUserContext currentUserContext;
 
-    public GenerationController(GenerationService generationService) {
+    public GenerationController(GenerationService generationService, CurrentUserContext currentUserContext) {
         this.generationService = generationService;
+        this.currentUserContext = currentUserContext;
     }
 
     @PostMapping("/generations")
@@ -43,11 +47,13 @@ public class GenerationController {
 
     @GetMapping("/history")
     public ResponseEntity<ApiResponse<List<HistoryItemResponse>>> listHistory() {
-        return ResponseEntity.ok(ApiResponse.ok(generationService.listHistory(), TraceIdContext.currentTraceId()));
+        AuthenticatedUser currentUser = currentUserContext.requireCurrentUser();
+        return ResponseEntity.ok(ApiResponse.ok(generationService.listHistory(currentUser.userId()), TraceIdContext.currentTraceId()));
     }
 
     @DeleteMapping("/history/{id}")
     public ResponseEntity<ApiResponse<DeleteHistoryResponse>> deleteHistory(@PathVariable("id") String historyId) {
-        return ResponseEntity.ok(ApiResponse.ok(generationService.deleteHistory(historyId), TraceIdContext.currentTraceId()));
+        AuthenticatedUser currentUser = currentUserContext.requireCurrentUser();
+        return ResponseEntity.ok(ApiResponse.ok(generationService.deleteHistory(currentUser.userId(), historyId), TraceIdContext.currentTraceId()));
     }
 }
