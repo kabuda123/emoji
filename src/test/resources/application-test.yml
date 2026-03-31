@@ -38,3 +38,5 @@ app:
     public-upload-base-url: https://files.example.com
     upload-path-prefix: emoji
     upload-expires-in-seconds: 900
+  internal:
+    api-token: test-internal-token

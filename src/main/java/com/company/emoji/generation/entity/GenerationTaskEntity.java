@@ -43,6 +43,9 @@ public class GenerationTaskEntity {
     @Column(name = "idempotency_key")
     private String idempotencyKey;
 
+    @Column(name = "provider_task_id")
+    private String providerTaskId;
+
     @Column(nullable = false)
     private boolean deleted;
 
@@ -74,6 +77,8 @@ public class GenerationTaskEntity {
     public void setFailedReason(String failedReason) { this.failedReason = failedReason; }
     public String getIdempotencyKey() { return idempotencyKey; }
     public void setIdempotencyKey(String idempotencyKey) { this.idempotencyKey = idempotencyKey; }
+    public String getProviderTaskId() { return providerTaskId; }
+    public void setProviderTaskId(String providerTaskId) { this.providerTaskId = providerTaskId; }
     public boolean isDeleted() { return deleted; }
     public void setDeleted(boolean deleted) { this.deleted = deleted; }
     public Instant getCreatedAt() { return createdAt; }

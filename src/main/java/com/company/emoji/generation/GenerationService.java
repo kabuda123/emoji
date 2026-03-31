@@ -8,6 +8,7 @@ import com.company.emoji.generation.dto.CreateGenerationResponse;
 import com.company.emoji.generation.dto.DeleteHistoryResponse;
 import com.company.emoji.generation.dto.GenerationDetailResponse;
 import com.company.emoji.generation.dto.HistoryItemResponse;
+import com.company.emoji.generation.dto.InternalGenerationStatusUpdateRequest;
 import com.company.emoji.generation.entity.GenerationTaskEntity;
 import com.company.emoji.template.TemplateRepository;
 import com.company.emoji.template.entity.StyleTemplateEntity;
@@ -18,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.UUID;
 
@@ -78,6 +80,60 @@ public class GenerationService {
         return new DeleteHistoryResponse(true, historyId);
     }
 
+    @Transactional
+    public GenerationDetailResponse updateStatus(String taskId, InternalGenerationStatusUpdateRequest request) {
+        GenerationTaskEntity task = generationTaskRepository.findByIdAndDeletedFalse(taskId)
+                .orElseThrow(() -> new ApiException(ApiErrorCode.NOT_FOUND, HttpStatus.NOT_FOUND, "Generation task not found"));
+
+        GenerationStatus currentStatus = GenerationStatus.valueOf(task.getStatus());
+        GenerationStatus targetStatus = request.status();
+        validateTransition(currentStatus, targetStatus);
+
+        task.setStatus(targetStatus.name());
+        task.setUpdatedAt(Instant.now());
+
+        if (request.providerTaskId() != null && !request.providerTaskId().isBlank()) {
+            task.setProviderTaskId(request.providerTaskId());
+        }
+        if (request.previewUrls() != null) {
+            task.setPreviewUrls(joinCsv(request.previewUrls()));
+        }
+
+        switch (targetStatus) {
+            case AUDITING -> task.setProgressPercent(5);
+            case READY_TO_DISPATCH -> task.setProgressPercent(10);
+            case RUNNING -> {
+                requireProviderTaskId(task);
+                task.setProgressPercent(normalizeProgress(request.progressPercent(), 15, 90));
+                task.setFailedReason(null);
+            }
+            case POST_PROCESSING -> task.setProgressPercent(normalizeProgress(request.progressPercent(), 90, 99));
+            case SUCCESS -> {
+                if (request.resultUrls() == null || request.resultUrls().isEmpty()) {
+                    throw new ApiException(ApiErrorCode.VALIDATION_ERROR, HttpStatus.BAD_REQUEST, "resultUrls are required for SUCCESS");
+                }
+                task.setProgressPercent(100);
+                task.setResultUrls(joinCsv(request.resultUrls()));
+                task.setFailedReason(null);
+            }
+            case FAILED -> {
+                if (request.failedReason() == null || request.failedReason().isBlank()) {
+                    throw new ApiException(ApiErrorCode.VALIDATION_ERROR, HttpStatus.BAD_REQUEST, "failedReason is required for FAILED");
+                }
+                task.setFailedReason(request.failedReason().trim());
+                task.setProgressPercent(normalizeProgress(request.progressPercent(), task.getProgressPercent(), 99));
+            }
+            case REFUNDED -> task.setProgressPercent(100);
+            case CREATED -> throw new ApiException(ApiErrorCode.CONFLICT, HttpStatus.CONFLICT, "Internal status update cannot move task back to CREATED");
+        }
+
+        if (targetStatus != GenerationStatus.SUCCESS && request.resultUrls() != null) {
+            task.setResultUrls(joinCsv(request.resultUrls()));
+        }
+
+        return toDetailResponse(task);
+    }
+
     private CreateGenerationResponse createTask(String userId, StyleTemplateEntity template, CreateGenerationRequest request, String idempotencyKey) {
         Instant now = Instant.now();
         GenerationTaskEntity task = new GenerationTaskEntity();
@@ -92,6 +148,7 @@ public class GenerationService {
         task.setResultUrls("");
         task.setFailedReason(null);
         task.setIdempotencyKey(blankToNull(idempotencyKey));
+        task.setProviderTaskId(null);
         task.setDeleted(false);
         task.setCreatedAt(now);
         task.setUpdatedAt(now);
@@ -157,5 +214,54 @@ public class GenerationService {
             return null;
         }
         return value;
+    }
+
+    private void requireProviderTaskId(GenerationTaskEntity task) {
+        if (task.getProviderTaskId() == null || task.getProviderTaskId().isBlank()) {
+            throw new ApiException(ApiErrorCode.VALIDATION_ERROR, HttpStatus.BAD_REQUEST, "providerTaskId is required for RUNNING");
+        }
+    }
+
+    private int normalizeProgress(Integer progressPercent, int minValue, int maxValue) {
+        if (progressPercent == null) {
+            return minValue;
+        }
+        return Math.max(minValue, Math.min(maxValue, progressPercent));
+    }
+
+    private String joinCsv(List<String> values) {
+        if (values == null || values.isEmpty()) {
+            return "";
+        }
+        return values.stream()
+                .map(String::trim)
+                .filter(part -> !part.isBlank())
+                .reduce((left, right) -> left + "," + right)
+                .orElse("");
+    }
+
+    private void validateTransition(GenerationStatus currentStatus, GenerationStatus targetStatus) {
+        if (currentStatus == targetStatus && targetStatus == GenerationStatus.RUNNING) {
+            return;
+        }
+
+        EnumSet<GenerationStatus> allowedTargets = switch (currentStatus) {
+            case CREATED -> EnumSet.of(GenerationStatus.AUDITING, GenerationStatus.READY_TO_DISPATCH, GenerationStatus.FAILED);
+            case AUDITING -> EnumSet.of(GenerationStatus.READY_TO_DISPATCH, GenerationStatus.FAILED);
+            case READY_TO_DISPATCH -> EnumSet.of(GenerationStatus.RUNNING, GenerationStatus.FAILED);
+            case RUNNING -> EnumSet.of(GenerationStatus.RUNNING, GenerationStatus.POST_PROCESSING, GenerationStatus.FAILED);
+            case POST_PROCESSING -> EnumSet.of(GenerationStatus.SUCCESS, GenerationStatus.FAILED);
+            case SUCCESS -> EnumSet.of(GenerationStatus.REFUNDED);
+            case FAILED -> EnumSet.of(GenerationStatus.REFUNDED);
+            case REFUNDED -> EnumSet.noneOf(GenerationStatus.class);
+        };
+
+        if (!allowedTargets.contains(targetStatus)) {
+            throw new ApiException(
+                    ApiErrorCode.CONFLICT,
+                    HttpStatus.CONFLICT,
+                    "Invalid generation status transition: " + currentStatus + " -> " + targetStatus
+            );
+        }
     }
 }

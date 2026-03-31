@@ -54,3 +54,5 @@ app:
     public-upload-base-url: ${APP_MEDIA_PUBLIC_UPLOAD_BASE_URL:https://files.example.com}
     upload-path-prefix: ${APP_MEDIA_UPLOAD_PATH_PREFIX:emoji}
     upload-expires-in-seconds: ${APP_MEDIA_UPLOAD_EXPIRES_IN_SECONDS:900}
+  internal:
+    api-token: ${APP_INTERNAL_API_TOKEN:change-this-internal-api-token}

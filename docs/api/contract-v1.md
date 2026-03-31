@@ -12,6 +12,7 @@ The current implementation keeps the URL, method, core DTOs, and response envelo
 - Protected endpoints now require a valid access token. Missing or invalid bearer token returns `401`; authenticated but disallowed access returns `403`.
 - Email login and Apple login now create or reuse a persisted user record on the server side.
 - Generation tasks are now persisted. Authenticated requests are attached to the current user; anonymous requests remain queryable by task ID but are not included in protected history APIs.
+- Internal task orchestration now uses a dedicated status-update endpoint protected by `X-Internal-Token`.
 
 ## Response envelope
 
@@ -177,6 +178,23 @@ Response fields:
 - `previewUrls`
 - `resultUrls`
 - `failedReason`
+
+### POST `/api/internal/generations/{taskId}/status`
+Authentication:
+- internal header `X-Internal-Token` required
+
+Request fields:
+- `status`: one of `AUDITING`, `READY_TO_DISPATCH`, `RUNNING`, `POST_PROCESSING`, `SUCCESS`, `FAILED`, `REFUNDED`
+- `progressPercent`: optional
+- `providerTaskId`: required on first `RUNNING` update
+- `previewUrls`: optional
+- `resultUrls`: required for `SUCCESS`
+- `failedReason`: required for `FAILED`
+
+Behavior:
+- validates allowed state transitions
+- updates persisted task state and progress
+- intended for future dispatcher/webhook integration
 
 ### GET `/api/history`
 Authentication:

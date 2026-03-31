@@ -33,6 +33,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class EmojiApplicationTests {
     private static final String CURRENT_USER_ID = "usr_test_123";
     private static final String CURRENT_USER_EMAIL = "current.user@example.com";
+    private static final String INTERNAL_API_TOKEN = "test-internal-token";
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     @Autowired
@@ -90,7 +91,7 @@ class EmojiApplicationTests {
 
     @Test
     void getGenerationShouldReadPersistedTask() throws Exception {
-        GenerationTaskEntity task = persistGenerationTask("task_detail_1", null, "comic", "uploads/demo/input.png", "RUNNING", 42, "https://example.com/previews/task_detail_1-1.png", "", false);
+        GenerationTaskEntity task = persistGenerationTask("task_detail_1", null, "comic", "uploads/demo/input.png", "RUNNING", 42, "https://example.com/previews/task_detail_1-1.png", "", false, "provider-detail-1");
 
         mockMvc.perform(get("/api/generations/" + task.getId()))
                 .andExpect(status().isOk())
@@ -147,8 +148,8 @@ class EmojiApplicationTests {
     @Test
     void historyShouldAcceptValidBearerToken() throws Exception {
         persistUser(CURRENT_USER_ID, "EMAIL", CURRENT_USER_EMAIL, 240, 0, "ACTIVE");
-        persistGenerationTask("task_hist_1", CURRENT_USER_ID, "comic", "uploads/demo/1.png", "SUCCESS", 100, "https://example.com/previews/task_hist_1.png", "https://example.com/results/task_hist_1.png", false);
-        persistGenerationTask("task_hist_2", CURRENT_USER_ID, "sticker", "uploads/demo/2.png", "RUNNING", 45, "https://example.com/previews/task_hist_2.png", "", false);
+        persistGenerationTask("task_hist_1", CURRENT_USER_ID, "comic", "uploads/demo/1.png", "SUCCESS", 100, "https://example.com/previews/task_hist_1.png", "https://example.com/results/task_hist_1.png", false, "provider-hist-1");
+        persistGenerationTask("task_hist_2", CURRENT_USER_ID, "sticker", "uploads/demo/2.png", "RUNNING", 45, "https://example.com/previews/task_hist_2.png", "", false, "provider-hist-2");
 
         mockMvc.perform(get("/api/history")
                         .header("Authorization", bearerToken()))
@@ -205,7 +206,7 @@ class EmojiApplicationTests {
     @Test
     void deleteHistoryShouldReturnUserScopedIdentifier() throws Exception {
         persistUser(CURRENT_USER_ID, "EMAIL", CURRENT_USER_EMAIL, 240, 0, "ACTIVE");
-        persistGenerationTask("task_demo_1", CURRENT_USER_ID, "comic", "uploads/demo/1.png", "SUCCESS", 100, "https://example.com/previews/task_demo_1.png", "https://example.com/results/task_demo_1.png", false);
+        persistGenerationTask("task_demo_1", CURRENT_USER_ID, "comic", "uploads/demo/1.png", "SUCCESS", 100, "https://example.com/previews/task_demo_1.png", "https://example.com/results/task_demo_1.png", false, "provider-demo-1");
 
         mockMvc.perform(delete("/api/history/task_demo_1")
                         .header("Authorization", bearerToken()))
@@ -241,6 +242,110 @@ class EmojiApplicationTests {
                 .andExpect(jsonPath("$.data[0].taskId").value(taskId));
     }
 
+    @Test
+    void internalStatusUpdateShouldRequireInternalToken() throws Exception {
+        persistGenerationTask("task_internal_1", null, "comic", "uploads/demo/internal.png", "CREATED", 0, "https://example.com/previews/task_internal_1.png", "", false, null);
+
+        mockMvc.perform(post("/api/internal/generations/task_internal_1/status")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "status": "AUDITING"
+                                }
+                                """))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
+    }
+
+    @Test
+    void internalStatusUpdateShouldAdvanceLifecycleToSuccess() throws Exception {
+        persistGenerationTask("task_internal_2", null, "comic", "uploads/demo/internal2.png", "CREATED", 0, "https://example.com/previews/task_internal_2.png", "", false, null);
+
+        postInternalStatus("task_internal_2", """
+                {
+                  "status": "AUDITING"
+                }
+                """)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("AUDITING"));
+
+        postInternalStatus("task_internal_2", """
+                {
+                  "status": "READY_TO_DISPATCH"
+                }
+                """)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("READY_TO_DISPATCH"));
+
+        postInternalStatus("task_internal_2", """
+                {
+                  "status": "RUNNING",
+                  "providerTaskId": "provider-task-2",
+                  "progressPercent": 46,
+                  "previewUrls": ["https://example.com/previews/task_internal_2-a.png"]
+                }
+                """)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("RUNNING"))
+                .andExpect(jsonPath("$.data.progressPercent").value(46));
+
+        postInternalStatus("task_internal_2", """
+                {
+                  "status": "POST_PROCESSING",
+                  "progressPercent": 95
+                }
+                """)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("POST_PROCESSING"));
+
+        postInternalStatus("task_internal_2", """
+                {
+                  "status": "SUCCESS",
+                  "resultUrls": ["https://example.com/results/task_internal_2-1.png"]
+                }
+                """)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.resultUrls[0]").value("https://example.com/results/task_internal_2-1.png"));
+
+        mockMvc.perform(get("/api/generations/task_internal_2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.progressPercent").value(100))
+                .andExpect(jsonPath("$.data.resultUrls[0]").value("https://example.com/results/task_internal_2-1.png"));
+    }
+
+    @Test
+    void internalStatusUpdateShouldRejectInvalidTransition() throws Exception {
+        persistGenerationTask("task_internal_3", null, "comic", "uploads/demo/internal3.png", "CREATED", 0, "https://example.com/previews/task_internal_3.png", "", false, null);
+
+        postInternalStatus("task_internal_3", """
+                {
+                  "status": "SUCCESS",
+                  "resultUrls": ["https://example.com/results/task_internal_3.png"]
+                }
+                """)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("CONFLICT"));
+    }
+
+    @Test
+    void internalStatusUpdateShouldRecordFailureReason() throws Exception {
+        persistGenerationTask("task_internal_4", null, "comic", "uploads/demo/internal4.png", "CREATED", 0, "https://example.com/previews/task_internal_4.png", "", false, null);
+
+        postInternalStatus("task_internal_4", """
+                {
+                  "status": "FAILED",
+                  "failedReason": "provider timeout"
+                }
+                """)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("FAILED"))
+                .andExpect(jsonPath("$.data.failedReason").value("provider timeout"));
+    }
+
     private String bearerToken() {
         return "Bearer " + jwtTokenService.issueAccessToken(CURRENT_USER_ID, Map.of("provider", "EMAIL", "email", CURRENT_USER_EMAIL));
     }
@@ -269,7 +374,8 @@ class EmojiApplicationTests {
             int progressPercent,
             String previewUrls,
             String resultUrls,
-            boolean deleted
+            boolean deleted,
+            String providerTaskId
     ) {
         Instant now = Instant.now();
         GenerationTaskEntity task = new GenerationTaskEntity();
@@ -282,10 +388,18 @@ class EmojiApplicationTests {
         task.setProgressPercent(progressPercent);
         task.setPreviewUrls(previewUrls);
         task.setResultUrls(resultUrls);
+        task.setProviderTaskId(providerTaskId);
         task.setDeleted(deleted);
         task.setCreatedAt(now);
         task.setUpdatedAt(now);
         return generationTaskRepository.save(task);
+    }
+
+    private org.springframework.test.web.servlet.ResultActions postInternalStatus(String taskId, String content) throws Exception {
+        return mockMvc.perform(post("/api/internal/generations/" + taskId + "/status")
+                .header("X-Internal-Token", INTERNAL_API_TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(content));
     }
 
     private String responseValue(MvcResult result, String pointer) throws Exception {
