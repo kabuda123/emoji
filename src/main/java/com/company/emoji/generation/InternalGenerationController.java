@@ -18,10 +18,16 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/internal/generations")
 public class InternalGenerationController {
     private final GenerationService generationService;
+    private final GenerationDispatchService generationDispatchService;
     private final InternalApiGuard internalApiGuard;
 
-    public InternalGenerationController(GenerationService generationService, InternalApiGuard internalApiGuard) {
+    public InternalGenerationController(
+            GenerationService generationService,
+            GenerationDispatchService generationDispatchService,
+            InternalApiGuard internalApiGuard
+    ) {
         this.generationService = generationService;
+        this.generationDispatchService = generationDispatchService;
         this.internalApiGuard = internalApiGuard;
     }
 
@@ -33,5 +39,14 @@ public class InternalGenerationController {
     ) {
         internalApiGuard.requireValidToken(internalToken);
         return ResponseEntity.ok(ApiResponse.ok(generationService.updateStatus(taskId, request), TraceIdContext.currentTraceId()));
+    }
+
+    @PostMapping("/{taskId}/dispatch")
+    public ResponseEntity<ApiResponse<GenerationDetailResponse>> dispatchGeneration(
+            @PathVariable String taskId,
+            @RequestHeader(value = "X-Internal-Token", required = false) String internalToken
+    ) {
+        internalApiGuard.requireValidToken(internalToken);
+        return ResponseEntity.ok(ApiResponse.ok(generationDispatchService.dispatch(taskId), TraceIdContext.currentTraceId()));
     }
 }

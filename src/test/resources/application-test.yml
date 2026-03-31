@@ -40,3 +40,8 @@ app:
     upload-expires-in-seconds: 900
   internal:
     api-token: test-internal-token
+  provider:
+    mock:
+      webhook-token: test-provider-webhook-token
+      preview-base-url: https://provider.example.com/mock/previews
+      result-base-url: https://provider.example.com/mock/results

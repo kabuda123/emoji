@@ -56,3 +56,8 @@ app:
     upload-expires-in-seconds: ${APP_MEDIA_UPLOAD_EXPIRES_IN_SECONDS:900}
   internal:
     api-token: ${APP_INTERNAL_API_TOKEN:change-this-internal-api-token}
+  provider:
+    mock:
+      webhook-token: ${APP_PROVIDER_MOCK_WEBHOOK_TOKEN:change-this-provider-webhook-token}
+      preview-base-url: ${APP_PROVIDER_MOCK_PREVIEW_BASE_URL:https://provider.example.com/mock/previews}
+      result-base-url: ${APP_PROVIDER_MOCK_RESULT_BASE_URL:https://provider.example.com/mock/results}

@@ -35,6 +35,7 @@ class EmojiApplicationTests {
     private static final String CURRENT_USER_ID = "usr_test_123";
     private static final String CURRENT_USER_EMAIL = "current.user@example.com";
     private static final String INTERNAL_API_TOKEN = "test-internal-token";
+    private static final String PROVIDER_WEBHOOK_TOKEN = "test-provider-webhook-token";
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     @Autowired
@@ -416,6 +417,135 @@ class EmojiApplicationTests {
         AppUserEntity user = userRepository.findById(CURRENT_USER_ID).orElseThrow();
         assertThat(user.getAvailableCredits()).isEqualTo(240);
         assertThat(user.getFrozenCredits()).isEqualTo(0);
+    }
+
+    @Test
+    void dispatchShouldRequireReadyToDispatchStatus() throws Exception {
+        persistGenerationTask("task_dispatch_1", null, "comic", "uploads/demo/dispatch1.png", "CREATED", 0, "", "", false, null);
+
+        mockMvc.perform(post("/api/internal/generations/task_dispatch_1/dispatch")
+                        .header("X-Internal-Token", INTERNAL_API_TOKEN))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("CONFLICT"));
+    }
+
+    @Test
+    void dispatchShouldAdvanceTaskToRunning() throws Exception {
+        persistGenerationTask("task_dispatch_2", null, "comic", "uploads/demo/dispatch2.png", "READY_TO_DISPATCH", 10, "", "", false, null);
+
+        mockMvc.perform(post("/api/internal/generations/task_dispatch_2/dispatch")
+                        .header("X-Internal-Token", INTERNAL_API_TOKEN))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("RUNNING"))
+                .andExpect(jsonPath("$.data.previewUrls[0]").value("https://provider.example.com/mock/previews/mock_task_dispatch_2.png"));
+
+        GenerationTaskEntity task = generationTaskRepository.findByIdAndDeletedFalse("task_dispatch_2").orElseThrow();
+        assertThat(task.getProviderTaskId()).isEqualTo("mock_task_dispatch_2");
+    }
+
+    @Test
+    void providerWebhookShouldRequireProviderToken() throws Exception {
+        persistGenerationTask("task_webhook_1", null, "comic", "uploads/demo/webhook1.png", "RUNNING", 45, "", "", false, "mock_task_webhook_1");
+
+        mockMvc.perform(post("/api/providers/mock/webhook")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "providerTaskId": "mock_task_webhook_1",
+                                  "status": "SUCCESS",
+                                  "resultUrls": ["https://provider.example.com/mock/results/mock_task_webhook_1.png"]
+                                }
+                                """))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
+    }
+
+    @Test
+    void providerWebhookShouldDriveTaskToSuccess() throws Exception {
+        persistUser(CURRENT_USER_ID, "EMAIL", CURRENT_USER_EMAIL, 240, 0, "ACTIVE");
+        String taskId = createAuthenticatedTask("comic", "uploads/demo/webhook-success.png");
+
+        postInternalStatus(taskId, """
+                {
+                  "status": "AUDITING"
+                }
+                """).andExpect(status().isOk());
+
+        postInternalStatus(taskId, """
+                {
+                  "status": "READY_TO_DISPATCH"
+                }
+                """).andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/internal/generations/" + taskId + "/dispatch")
+                        .header("X-Internal-Token", INTERNAL_API_TOKEN))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("RUNNING"));
+
+        mockMvc.perform(post("/api/providers/mock/webhook")
+                        .header("X-Provider-Token", PROVIDER_WEBHOOK_TOKEN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "providerTaskId": "mock_%s",
+                                  "status": "POST_PROCESSING",
+                                  "progressPercent": 94
+                                }
+                                """.formatted(taskId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("POST_PROCESSING"));
+
+        mockMvc.perform(post("/api/providers/mock/webhook")
+                        .header("X-Provider-Token", PROVIDER_WEBHOOK_TOKEN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "providerTaskId": "mock_%s",
+                                  "status": "SUCCESS",
+                                  "resultUrls": ["https://provider.example.com/mock/results/%s.png"]
+                                }
+                                """.formatted(taskId, taskId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.resultUrls[0]").value("https://provider.example.com/mock/results/" + taskId + ".png"));
+    }
+
+    @Test
+    void providerWebhookShouldDriveTaskToFailed() throws Exception {
+        persistUser(CURRENT_USER_ID, "EMAIL", CURRENT_USER_EMAIL, 240, 0, "ACTIVE");
+        String taskId = createAuthenticatedTask("comic", "uploads/demo/webhook-failed.png");
+
+        postInternalStatus(taskId, """
+                {
+                  "status": "AUDITING"
+                }
+                """).andExpect(status().isOk());
+
+        postInternalStatus(taskId, """
+                {
+                  "status": "READY_TO_DISPATCH"
+                }
+                """).andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/internal/generations/" + taskId + "/dispatch")
+                        .header("X-Internal-Token", INTERNAL_API_TOKEN))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/providers/mock/webhook")
+                        .header("X-Provider-Token", PROVIDER_WEBHOOK_TOKEN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "providerTaskId": "mock_%s",
+                                  "status": "FAILED",
+                                  "failedReason": "provider mock failure"
+                                }
+                                """.formatted(taskId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("FAILED"))
+                .andExpect(jsonPath("$.data.failedReason").value("provider mock failure"));
     }
 
     private String bearerToken() {

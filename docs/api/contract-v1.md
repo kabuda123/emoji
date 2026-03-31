@@ -14,6 +14,7 @@ The current implementation keeps the URL, method, core DTOs, and response envelo
 - Generation tasks are now persisted. Authenticated requests are attached to the current user; anonymous requests remain queryable by task ID but are not included in protected history APIs.
 - Internal task orchestration now uses a dedicated status-update endpoint protected by `X-Internal-Token`.
 - Authenticated generation requests now reserve template credits at creation time. `SUCCESS` confirms the deduction; `FAILED` and `REFUNDED` release the reserved amount back to the user account.
+- Mock provider dispatch and webhook skeleton are now available for end-to-end integration testing.
 
 ## Response envelope
 
@@ -198,6 +199,32 @@ Behavior:
 - validates allowed state transitions
 - updates persisted task state and progress
 - intended for future dispatcher/webhook integration
+
+### POST `/api/internal/generations/{taskId}/dispatch`
+Authentication:
+- internal header `X-Internal-Token` required
+
+Behavior:
+- requires task status `READY_TO_DISPATCH`
+- dispatches the task through the configured provider adapter
+- writes `providerTaskId`
+- advances the task to `RUNNING`
+
+### POST `/api/providers/mock/webhook`
+Authentication:
+- provider header `X-Provider-Token` required
+
+Request fields:
+- `providerTaskId`: string, required
+- `status`: one of `RUNNING`, `POST_PROCESSING`, `SUCCESS`, `FAILED`, `REFUNDED`
+- `progressPercent`: optional
+- `previewUrls`: optional
+- `resultUrls`: required for `SUCCESS`
+- `failedReason`: required for `FAILED`
+
+Behavior:
+- resolves the persisted task by `providerTaskId`
+- reuses the same internal state machine rules as the internal status endpoint
 
 ### GET `/api/history`
 Authentication:

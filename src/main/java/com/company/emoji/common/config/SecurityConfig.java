@@ -42,6 +42,7 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/internal/generations/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/providers/mock/webhook").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/config/bootstrap").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/templates", "/api/templates/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/upload/policy", "/api/generations", "/api/iap/verify").permitAll()
