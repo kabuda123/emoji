@@ -7,6 +7,7 @@ import com.company.emoji.generation.GenerationTaskRepository;
 import com.company.emoji.generation.entity.GenerationTaskEntity;
 import com.company.emoji.media.MediaAssetRepository;
 import com.company.emoji.media.entity.MediaAssetEntity;
+import com.company.emoji.template.TemplateRepository;
 import com.company.emoji.user.AccountCleanupJobRepository;
 import com.company.emoji.user.CreditLedgerRepository;
 import com.company.emoji.user.UserRepository;
@@ -60,6 +61,9 @@ class EmojiApplicationTests {
 
     @Autowired
     private GenerationTaskRepository generationTaskRepository;
+
+    @Autowired
+    private TemplateRepository templateRepository;
 
     @Autowired
     private AccountCleanupJobRepository accountCleanupJobRepository;
@@ -393,6 +397,71 @@ class EmojiApplicationTests {
     }
 
     @Test
+    void internalTemplateManagementShouldRequireInternalToken() throws Exception {
+        mockMvc.perform(get("/api/internal/admin/templates"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
+    }
+
+    @Test
+    void internalTemplateManagementShouldUpdateTemplateState() throws Exception {
+        mockMvc.perform(post("/api/internal/admin/templates/comic")
+                        .header("X-Internal-Token", INTERNAL_API_TOKEN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "enabled": false,
+                                  "priceCredits": 88
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.id").value("comic"))
+                .andExpect(jsonPath("$.data.enabled").value(false))
+                .andExpect(jsonPath("$.data.priceCredits").value(88));
+
+        mockMvc.perform(get("/api/templates/comic"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.enabled").value(false))
+                .andExpect(jsonPath("$.data.priceCredits").value(88));
+    }
+
+    @Test
+    void internalBootstrapManagementShouldUpdatePublicBootstrapResponse() throws Exception {
+        mockMvc.perform(post("/api/internal/admin/config/bootstrap")
+                        .header("X-Internal-Token", INTERNAL_API_TOKEN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "productName": "Emoji Ops Preview",
+                                  "iosReviewMode": true,
+                                  "iapEnabled": false,
+                                  "supportedLoginMethods": ["EMAIL"],
+                                  "generationMinImages": 1,
+                                  "generationMaxImages": 3,
+                                  "generationPollSeconds": 9
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.productName").value("Emoji Ops Preview"))
+                .andExpect(jsonPath("$.data.iosReviewMode").value(true))
+                .andExpect(jsonPath("$.data.iapEnabled").value(false));
+
+        mockMvc.perform(get("/api/internal/admin/config/bootstrap")
+                        .header("X-Internal-Token", INTERNAL_API_TOKEN))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.supportedLoginMethods[0]").value("EMAIL"))
+                .andExpect(jsonPath("$.data.generation.minImages").value(1))
+                .andExpect(jsonPath("$.data.generation.maxImages").value(3))
+                .andExpect(jsonPath("$.data.generation.defaultPollSeconds").value(9));
+
+        mockMvc.perform(get("/api/config/bootstrap"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.productName").value("Emoji Ops Preview"))
+                .andExpect(jsonPath("$.data.generation.defaultPollSeconds").value(9));
+    }
+
+    @Test
     void deleteAccountShouldRequireValidBearerToken() throws Exception {
         persistUser(CURRENT_USER_ID, "EMAIL", CURRENT_USER_EMAIL, 240, 0, "ACTIVE");
         persistGenerationTask("task_cleanup_1", CURRENT_USER_ID, "comic", sourceObjectKey("cleanup-input.png"), "SUCCESS", 100, "", "", false, "provider-cleanup-1");
@@ -442,6 +511,7 @@ class EmojiApplicationTests {
     @Test
     void authenticatedCreateShouldAppearInHistory() throws Exception {
         persistUser(CURRENT_USER_ID, "EMAIL", CURRENT_USER_EMAIL, 240, 0, "ACTIVE");
+        int currentPrice = currentTemplatePrice("comic");
 
         String taskId = createAuthenticatedTask("comic", "uploads/demo/auth-input.png");
 
@@ -451,11 +521,11 @@ class EmojiApplicationTests {
                 .andExpect(jsonPath("$.data[0].taskId").value(taskId));
 
         AppUserEntity user = userRepository.findById(CURRENT_USER_ID).orElseThrow();
-        assertThat(user.getAvailableCredits()).isEqualTo(228);
-        assertThat(user.getFrozenCredits()).isEqualTo(12);
+        assertThat(user.getAvailableCredits()).isEqualTo(240 - currentPrice);
+        assertThat(user.getFrozenCredits()).isEqualTo(currentPrice);
         assertThat(creditLedgerRepository.findAllByGenerationTaskIdOrderByCreatedAtAsc(taskId))
                 .extracting(CreditLedgerEntryEntity::getEntryType, CreditLedgerEntryEntity::getAvailableDelta, CreditLedgerEntryEntity::getFrozenDelta)
-                .contains(tuple("GENERATION_RESERVE", -12, 12));
+                .contains(tuple("GENERATION_RESERVE", -currentPrice, currentPrice));
 
         MediaAssetEntity sourceAsset = mediaAssetRepository.findByObjectKey(sourceObjectKey("auth-input.png")).orElseThrow();
         assertThat(sourceAsset.getGenerationTaskId()).isEqualTo(taskId);
@@ -516,6 +586,7 @@ class EmojiApplicationTests {
     @Test
     void internalStatusUpdateShouldAdvanceLifecycleToSuccess() throws Exception {
         persistUser(CURRENT_USER_ID, "EMAIL", CURRENT_USER_EMAIL, 240, 0, "ACTIVE");
+        int currentPrice = currentTemplatePrice("comic");
         String taskId = createAuthenticatedTask("comic", "uploads/demo/internal2.png");
 
         postInternalStatus(taskId, """
@@ -572,7 +643,7 @@ class EmojiApplicationTests {
                 .andExpect(jsonPath("$.data.resultUrls[0]").value("https://example.com/results/task_internal_2-1.png"));
 
         AppUserEntity user = userRepository.findById(CURRENT_USER_ID).orElseThrow();
-        assertThat(user.getAvailableCredits()).isEqualTo(228);
+        assertThat(user.getAvailableCredits()).isEqualTo(240 - currentPrice);
         assertThat(user.getFrozenCredits()).isEqualTo(0);
     }
 
@@ -982,6 +1053,10 @@ class EmojiApplicationTests {
                 .andExpect(status().isAccepted())
                 .andReturn();
         return responseValue(result, "/data/taskId");
+    }
+
+    private int currentTemplatePrice(String templateId) {
+        return templateRepository.findById(templateId).orElseThrow().getPriceCredits();
     }
 
     private String sourceObjectKey(String fileName) {

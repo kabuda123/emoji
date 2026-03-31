@@ -344,3 +344,37 @@ Query parameters:
 Behavior:
 - requires at least one filter
 - returns matching ledger entries for internal support and admin use
+
+### GET `/api/internal/admin/templates`
+Authentication:
+- internal header `X-Internal-Token` required
+
+Behavior:
+- returns the current template summary list for internal management use
+
+### POST `/api/internal/admin/templates/{id}`
+Authentication:
+- internal header `X-Internal-Token` required
+
+Request fields:
+- `enabled`: optional
+- `priceCredits`: optional
+
+Behavior:
+- updates the target template's enabled state and/or credit price
+- changes are persisted and reflected in public template endpoints
+
+### GET `/api/internal/admin/config/bootstrap`
+Authentication:
+- internal header `X-Internal-Token` required
+
+Behavior:
+- returns the effective bootstrap config, including runtime overrides
+
+### POST `/api/internal/admin/config/bootstrap`
+Authentication:
+- internal header `X-Internal-Token` required
+
+Behavior:
+- applies runtime-only bootstrap overrides for internal management and test operation
+- changes are reflected immediately in public `/api/config/bootstrap`
