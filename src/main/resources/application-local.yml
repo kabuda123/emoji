@@ -1,0 +1,9 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/emoji
+    username: emoji
+    password: emoji
+  data:
+    redis:
+      host: localhost
+      port: 6379

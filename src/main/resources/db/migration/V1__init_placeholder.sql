@@ -1,0 +1,2 @@
+-- Initial placeholder migration.
+-- Concrete tables will follow the project-level AGENTS.md constraints.
