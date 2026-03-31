@@ -53,6 +53,10 @@ app:
   media:
     public-upload-base-url: ${APP_MEDIA_PUBLIC_UPLOAD_BASE_URL:https://files.example.com}
     upload-path-prefix: ${APP_MEDIA_UPLOAD_PATH_PREFIX:emoji}
+    source-path-prefix: ${APP_MEDIA_SOURCE_PATH_PREFIX:source}
+    preview-path-prefix: ${APP_MEDIA_PREVIEW_PATH_PREFIX:generated/previews}
+    result-path-prefix: ${APP_MEDIA_RESULT_PATH_PREFIX:generated/results}
+    allowed-content-types: ${APP_MEDIA_ALLOWED_CONTENT_TYPES:image/png,image/jpeg,image/webp}
     upload-expires-in-seconds: ${APP_MEDIA_UPLOAD_EXPIRES_IN_SECONDS:900}
   internal:
     api-token: ${APP_INTERNAL_API_TOKEN:change-this-internal-api-token}

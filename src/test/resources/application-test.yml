@@ -37,6 +37,10 @@ app:
   media:
     public-upload-base-url: https://files.example.com
     upload-path-prefix: emoji
+    source-path-prefix: source
+    preview-path-prefix: generated/previews
+    result-path-prefix: generated/results
+    allowed-content-types: image/png,image/jpeg,image/webp
     upload-expires-in-seconds: 900
   internal:
     api-token: test-internal-token

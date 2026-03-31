@@ -1,30 +1,19 @@
 package com.company.emoji.media;
 
-import com.company.emoji.media.dto.UploadPolicyRequest;
-import com.company.emoji.media.dto.UploadPolicyResponse;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDate;
-import java.util.Map;
-import java.util.UUID;
+import com.company.emoji.media.dto.UploadPolicyRequest;
+import com.company.emoji.media.dto.UploadPolicyResponse;
 
 @Service
 public class UploadPolicyService {
-    private final UploadProperties uploadProperties;
+    private final MediaAssetService mediaAssetService;
 
-    public UploadPolicyService(UploadProperties uploadProperties) {
-        this.uploadProperties = uploadProperties;
+    public UploadPolicyService(MediaAssetService mediaAssetService) {
+        this.mediaAssetService = mediaAssetService;
     }
 
     public UploadPolicyResponse createPolicy(UploadPolicyRequest request) {
-        String objectKey = uploadProperties.uploadPathPrefix() + "/" + LocalDate.now() + "/" + UUID.randomUUID() + "-" + request.fileName();
-        String uploadUrl = uploadProperties.publicUploadBaseUrl().replaceAll("/$", "") + "/" + objectKey;
-        return new UploadPolicyResponse(
-                objectKey,
-                uploadUrl,
-                "PUT",
-                Map.of("Content-Type", request.contentType()),
-                uploadProperties.uploadExpiresInSeconds()
-        );
+        return mediaAssetService.createUploadPolicy(request);
     }
 }

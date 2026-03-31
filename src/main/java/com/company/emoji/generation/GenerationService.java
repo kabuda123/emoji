@@ -11,6 +11,7 @@ import com.company.emoji.generation.dto.GenerationDetailResponse;
 import com.company.emoji.generation.dto.HistoryItemResponse;
 import com.company.emoji.generation.dto.InternalGenerationStatusUpdateRequest;
 import com.company.emoji.generation.entity.GenerationTaskEntity;
+import com.company.emoji.media.MediaAssetService;
 import com.company.emoji.template.TemplateRepository;
 import com.company.emoji.template.entity.StyleTemplateEntity;
 import com.company.emoji.user.UserAccountService;
@@ -28,21 +29,25 @@ import java.util.UUID;
 public class GenerationService {
     private final UserAccountService userAccountService;
     private final GenerationTaskRepository generationTaskRepository;
+    private final MediaAssetService mediaAssetService;
     private final TemplateRepository templateRepository;
 
     public GenerationService(
             UserAccountService userAccountService,
             GenerationTaskRepository generationTaskRepository,
+            MediaAssetService mediaAssetService,
             TemplateRepository templateRepository
     ) {
         this.userAccountService = userAccountService;
         this.generationTaskRepository = generationTaskRepository;
+        this.mediaAssetService = mediaAssetService;
         this.templateRepository = templateRepository;
     }
 
     @Transactional
     public CreateGenerationResponse create(String userId, CreateGenerationRequest request, String idempotencyKey) {
         StyleTemplateEntity template = requireTemplate(request.templateId());
+        mediaAssetService.assertValidSourceObjectKey(request.inputObjectKey());
 
         if (userId != null) {
             userAccountService.requireActiveUser(userId);
@@ -181,8 +186,8 @@ public class GenerationService {
                 task.getId(),
                 GenerationStatus.valueOf(task.getStatus()),
                 task.getProgressPercent(),
-                splitCsv(task.getPreviewUrls()),
-                splitCsv(task.getResultUrls()),
+                mediaAssetService.toPublicUrls(splitCsv(task.getPreviewUrls())),
+                mediaAssetService.toPublicUrls(splitCsv(task.getResultUrls())),
                 task.getFailedReason()
         );
     }
@@ -199,15 +204,15 @@ public class GenerationService {
     }
 
     private String historyCoverUrl(GenerationTaskEntity task, StyleTemplateEntity template) {
-        List<String> resultUrls = splitCsv(task.getResultUrls());
+        List<String> resultUrls = mediaAssetService.toPublicUrls(splitCsv(task.getResultUrls()));
         if (!resultUrls.isEmpty()) {
             return resultUrls.get(0);
         }
-        List<String> previewUrls = splitCsv(task.getPreviewUrls());
+        List<String> previewUrls = mediaAssetService.toPublicUrls(splitCsv(task.getPreviewUrls()));
         if (!previewUrls.isEmpty()) {
             return previewUrls.get(0);
         }
-        return template.getPreviewUrl();
+        return mediaAssetService.toPublicUrl(template.getPreviewUrl());
     }
 
     private StyleTemplateEntity requireTemplate(String templateId) {

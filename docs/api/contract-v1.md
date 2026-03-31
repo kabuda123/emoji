@@ -15,6 +15,7 @@ The current implementation keeps the URL, method, core DTOs, and response envelo
 - Internal task orchestration now uses a dedicated status-update endpoint protected by `X-Internal-Token`.
 - Authenticated generation requests now reserve template credits at creation time. `SUCCESS` confirms the deduction; `FAILED` and `REFUNDED` release the reserved amount back to the user account.
 - Mock provider dispatch and webhook skeleton are now available for end-to-end integration testing.
+- Media handling now uses managed object keys. Public APIs return resolved URLs while internal/provider flows may pass storage object keys.
 
 ## Response envelope
 
@@ -158,6 +159,10 @@ Response fields:
 - `headers`
 - `expiresInSeconds`
 
+Behavior:
+- validates `contentType` against the configured allow-list
+- returns a managed source object key under the upload prefix
+
 ### POST `/api/generations`
 Headers:
 - `Idempotency-Key`: optional in current skeleton, recommended in client implementation
@@ -166,6 +171,9 @@ Request fields:
 - `templateId`: string, required
 - `inputObjectKey`: string, required
 - `count`: integer, required
+
+Request constraints:
+- `inputObjectKey` must come from the managed upload policy and stay within the configured source prefix
 
 Response fields:
 - `taskId`
@@ -225,6 +233,7 @@ Request fields:
 Behavior:
 - resolves the persisted task by `providerTaskId`
 - reuses the same internal state machine rules as the internal status endpoint
+- `previewUrls` / `resultUrls` may contain managed object keys; public task detail responses always return resolved URLs
 
 ### GET `/api/history`
 Authentication:

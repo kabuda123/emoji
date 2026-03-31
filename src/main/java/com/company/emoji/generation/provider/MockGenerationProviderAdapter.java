@@ -1,16 +1,16 @@
 package com.company.emoji.generation.provider;
 
-import com.company.emoji.common.config.MockProviderProperties;
+import com.company.emoji.media.MediaAssetService;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
 
 @Component
 public class MockGenerationProviderAdapter implements GenerationProviderAdapter {
-    private final MockProviderProperties mockProviderProperties;
+    private final MediaAssetService mediaAssetService;
 
-    public MockGenerationProviderAdapter(MockProviderProperties mockProviderProperties) {
-        this.mockProviderProperties = mockProviderProperties;
+    public MockGenerationProviderAdapter(MediaAssetService mediaAssetService) {
+        this.mediaAssetService = mediaAssetService;
     }
 
     @Override
@@ -23,7 +23,7 @@ public class MockGenerationProviderAdapter implements GenerationProviderAdapter 
         String providerTaskId = "mock_" + request.taskId();
         return new ProviderDispatchResponse(
                 providerTaskId,
-                List.of(mockProviderProperties.previewBaseUrl() + "/" + providerTaskId + ".png")
+                List.of(mediaAssetService.buildPreviewObjectKey(providerTaskId, 1))
         );
     }
 }

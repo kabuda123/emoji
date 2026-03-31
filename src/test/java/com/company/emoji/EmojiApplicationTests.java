@@ -70,6 +70,38 @@ class EmojiApplicationTests {
     }
 
     @Test
+    void uploadPolicyShouldGenerateManagedSourceObjectKey() throws Exception {
+        mockMvc.perform(post("/api/upload/policy")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "fileName": "avatar.png",
+                                  "contentType": "image/png"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.objectKey").value(org.hamcrest.Matchers.startsWith("emoji/source/")))
+                .andExpect(jsonPath("$.data.uploadUrl").value(org.hamcrest.Matchers.startsWith("https://files.example.com/emoji/source/")))
+                .andExpect(jsonPath("$.data.headers.Content-Type").value("image/png"));
+    }
+
+    @Test
+    void uploadPolicyShouldRejectUnsupportedContentType() throws Exception {
+        mockMvc.perform(post("/api/upload/policy")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "fileName": "avatar.gif",
+                                  "contentType": "image/gif"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
     void createGenerationShouldReturnAcceptedEnvelope() throws Exception {
         MvcResult result = mockMvc.perform(post("/api/generations")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -77,10 +109,10 @@ class EmojiApplicationTests {
                         .content("""
                                 {
                                   \"templateId\": \"comic\",
-                                  \"inputObjectKey\": \"uploads/demo/input.png\",
+                                  \"inputObjectKey\": \"%s\",
                                   \"count\": 2
                                 }
-                                """))
+                                """.formatted(sourceObjectKey("input.png"))))
                 .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.status").value("CREATED"))
@@ -245,13 +277,29 @@ class EmojiApplicationTests {
                         .content("""
                                 {
                                   "templateId": "comic",
-                                  "inputObjectKey": "uploads/demo/no-balance.png",
+                                  "inputObjectKey": "%s",
                                   "count": 2
                                 }
-                                """))
+                                """.formatted(sourceObjectKey("no-balance.png"))))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.error.code").value("INSUFFICIENT_CREDITS"));
+    }
+
+    @Test
+    void createGenerationShouldRejectOutOfScopeInputObjectKey() throws Exception {
+        mockMvc.perform(post("/api/generations")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "templateId": "comic",
+                                  "inputObjectKey": "external-bucket/input.png",
+                                  "count": 2
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("VALIDATION_ERROR"));
     }
 
     @Test
@@ -438,7 +486,7 @@ class EmojiApplicationTests {
                         .header("X-Internal-Token", INTERNAL_API_TOKEN))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("RUNNING"))
-                .andExpect(jsonPath("$.data.previewUrls[0]").value("https://provider.example.com/mock/previews/mock_task_dispatch_2.png"));
+                .andExpect(jsonPath("$.data.previewUrls[0]").value("https://files.example.com/emoji/generated/previews/mock_task_dispatch_2-1.png"));
 
         GenerationTaskEntity task = generationTaskRepository.findByIdAndDeletedFalse("task_dispatch_2").orElseThrow();
         assertThat(task.getProviderTaskId()).isEqualTo("mock_task_dispatch_2");
@@ -504,12 +552,12 @@ class EmojiApplicationTests {
                                 {
                                   "providerTaskId": "mock_%s",
                                   "status": "SUCCESS",
-                                  "resultUrls": ["https://provider.example.com/mock/results/%s.png"]
+                                  "resultUrls": ["emoji/generated/results/mock_%s-1.png"]
                                 }
                                 """.formatted(taskId, taskId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("SUCCESS"))
-                .andExpect(jsonPath("$.data.resultUrls[0]").value("https://provider.example.com/mock/results/" + taskId + ".png"));
+                .andExpect(jsonPath("$.data.resultUrls[0]").value("https://files.example.com/emoji/generated/results/mock_" + taskId + "-1.png"));
     }
 
     @Test
@@ -612,6 +660,7 @@ class EmojiApplicationTests {
     }
 
     private String createAuthenticatedTask(String templateId, String inputObjectKey) throws Exception {
+        String managedInputObjectKey = inputObjectKey.startsWith("emoji/source/") ? inputObjectKey : sourceObjectKey(inputObjectKey.replaceAll("^.*/", ""));
         MvcResult result = mockMvc.perform(post("/api/generations")
                         .contentType(MediaType.APPLICATION_JSON)
                         .header("Authorization", bearerToken())
@@ -621,9 +670,13 @@ class EmojiApplicationTests {
                                   "inputObjectKey": "%s",
                                   "count": 2
                                 }
-                                """.formatted(templateId, inputObjectKey)))
+                                """.formatted(templateId, managedInputObjectKey)))
                 .andExpect(status().isAccepted())
                 .andReturn();
         return responseValue(result, "/data/taskId");
+    }
+
+    private String sourceObjectKey(String fileName) {
+        return "emoji/source/2026-03-31/" + fileName;
     }
 }
