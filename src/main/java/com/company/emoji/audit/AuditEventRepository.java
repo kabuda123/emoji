@@ -7,4 +7,5 @@ import java.util.List;
 
 public interface AuditEventRepository extends JpaRepository<AuditEventEntity, String> {
     List<AuditEventEntity> findAllByGenerationTaskIdOrderByCreatedAtAsc(String generationTaskId);
+    List<AuditEventEntity> findAllByCleanupJobIdOrderByCreatedAtAsc(String cleanupJobId);
 }

@@ -21,9 +21,11 @@ public class UserAccountService {
     private static final int INITIAL_AVAILABLE_CREDITS = 240;
 
     private final UserRepository userRepository;
+    private final AccountCleanupService accountCleanupService;
 
-    public UserAccountService(UserRepository userRepository) {
+    public UserAccountService(UserRepository userRepository, AccountCleanupService accountCleanupService) {
         this.userRepository = userRepository;
+        this.accountCleanupService = accountCleanupService;
     }
 
     @Transactional
@@ -61,7 +63,7 @@ public class UserAccountService {
         user.setDeletionRequestedAt(now);
         user.setDeletionScheduledAt(scheduledDeletionAt);
         user.setUpdatedAt(now);
-        return new DeleteAccountResponse("SCHEDULED", scheduledDeletionAt);
+        return new DeleteAccountResponse("SCHEDULED", scheduledDeletionAt, accountCleanupService.scheduleDeletion(user, request).getId());
     }
 
     @Transactional

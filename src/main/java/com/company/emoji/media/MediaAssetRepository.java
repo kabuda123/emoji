@@ -9,4 +9,5 @@ import java.util.Optional;
 public interface MediaAssetRepository extends JpaRepository<MediaAssetEntity, String> {
     Optional<MediaAssetEntity> findByObjectKey(String objectKey);
     List<MediaAssetEntity> findAllByGenerationTaskIdOrderByCreatedAtAsc(String generationTaskId);
+    List<MediaAssetEntity> findAllByOwnerUserIdOrderByCreatedAtAsc(String ownerUserId);
 }

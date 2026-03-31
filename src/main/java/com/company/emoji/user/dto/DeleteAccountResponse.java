@@ -4,6 +4,7 @@ import java.time.Instant;
 
 public record DeleteAccountResponse(
         String status,
-        Instant scheduledDeletionAt
+        Instant scheduledDeletionAt,
+        String cleanupJobId
 ) {
 }

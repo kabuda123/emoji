@@ -37,6 +37,15 @@ public class MediaAssetEntity {
     @Column(name = "source_status", nullable = false)
     private String sourceStatus;
 
+    @Column(name = "lifecycle_status", nullable = false)
+    private String lifecycleStatus;
+
+    @Column(name = "purge_scheduled_at")
+    private Instant purgeScheduledAt;
+
+    @Column(name = "purged_at")
+    private Instant purgedAt;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -61,6 +70,12 @@ public class MediaAssetEntity {
     public void setPublicUrl(String publicUrl) { this.publicUrl = publicUrl; }
     public String getSourceStatus() { return sourceStatus; }
     public void setSourceStatus(String sourceStatus) { this.sourceStatus = sourceStatus; }
+    public String getLifecycleStatus() { return lifecycleStatus; }
+    public void setLifecycleStatus(String lifecycleStatus) { this.lifecycleStatus = lifecycleStatus; }
+    public Instant getPurgeScheduledAt() { return purgeScheduledAt; }
+    public void setPurgeScheduledAt(Instant purgeScheduledAt) { this.purgeScheduledAt = purgeScheduledAt; }
+    public Instant getPurgedAt() { return purgedAt; }
+    public void setPurgedAt(Instant purgedAt) { this.purgedAt = purgedAt; }
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }

@@ -25,6 +25,12 @@ public class AuditEventEntity {
     @Column(name = "provider_task_id")
     private String providerTaskId;
 
+    @Column(name = "user_id")
+    private String userId;
+
+    @Column(name = "cleanup_job_id")
+    private String cleanupJobId;
+
     @Column(nullable = false, columnDefinition = "TEXT")
     private String payload;
 
@@ -41,6 +47,10 @@ public class AuditEventEntity {
     public void setGenerationTaskId(String generationTaskId) { this.generationTaskId = generationTaskId; }
     public String getProviderTaskId() { return providerTaskId; }
     public void setProviderTaskId(String providerTaskId) { this.providerTaskId = providerTaskId; }
+    public String getUserId() { return userId; }
+    public void setUserId(String userId) { this.userId = userId; }
+    public String getCleanupJobId() { return cleanupJobId; }
+    public void setCleanupJobId(String cleanupJobId) { this.cleanupJobId = cleanupJobId; }
     public String getPayload() { return payload; }
     public void setPayload(String payload) { this.payload = payload; }
     public Instant getCreatedAt() { return createdAt; }

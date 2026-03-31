@@ -7,7 +7,9 @@ import com.company.emoji.generation.GenerationTaskRepository;
 import com.company.emoji.generation.entity.GenerationTaskEntity;
 import com.company.emoji.media.MediaAssetRepository;
 import com.company.emoji.media.entity.MediaAssetEntity;
+import com.company.emoji.user.AccountCleanupJobRepository;
 import com.company.emoji.user.UserRepository;
+import com.company.emoji.user.entity.AccountCleanupJobEntity;
 import com.company.emoji.user.entity.AppUserEntity;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -54,6 +56,9 @@ class EmojiApplicationTests {
 
     @Autowired
     private GenerationTaskRepository generationTaskRepository;
+
+    @Autowired
+    private AccountCleanupJobRepository accountCleanupJobRepository;
 
     @Autowired
     private MediaAssetRepository mediaAssetRepository;
@@ -235,6 +240,8 @@ class EmojiApplicationTests {
     @Test
     void deleteAccountShouldRequireValidBearerToken() throws Exception {
         persistUser(CURRENT_USER_ID, "EMAIL", CURRENT_USER_EMAIL, 240, 0, "ACTIVE");
+        persistGenerationTask("task_cleanup_1", CURRENT_USER_ID, "comic", sourceObjectKey("cleanup-input.png"), "SUCCESS", 100, "", "", false, "provider-cleanup-1");
+        persistMediaAsset("media_cleanup_1", CURRENT_USER_ID, "task_cleanup_1", sourceObjectKey("cleanup-input.png"), "SOURCE");
 
         mockMvc.perform(post("/api/account/delete")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -247,11 +254,20 @@ class EmojiApplicationTests {
                                 """))
                 .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.status").value("SCHEDULED"));
+                .andExpect(jsonPath("$.data.status").value("SCHEDULED"))
+                .andExpect(jsonPath("$.data.cleanupJobId").isString());
 
         AppUserEntity user = userRepository.findById(CURRENT_USER_ID).orElseThrow();
         assertThat(user.getStatus()).isEqualTo("DELETION_REQUESTED");
         assertThat(user.getDeletionScheduledAt()).isNotNull();
+
+        AccountCleanupJobEntity cleanupJob = accountCleanupJobRepository.findByUserId(CURRENT_USER_ID).orElseThrow();
+        assertThat(cleanupJob.getStatus()).isEqualTo("SCHEDULED");
+        assertThat(generationTaskRepository.findById("task_cleanup_1").orElseThrow().getLifecycleStatus()).isEqualTo("DELETION_SCHEDULED");
+        assertThat(mediaAssetRepository.findByObjectKey(sourceObjectKey("cleanup-input.png")).orElseThrow().getLifecycleStatus()).isEqualTo("DELETION_SCHEDULED");
+        assertThat(auditEventRepository.findAllByCleanupJobIdOrderByCreatedAtAsc(cleanupJob.getId()))
+                .extracting(AuditEventEntity::getEventType)
+                .contains("ACCOUNT_DELETION_REQUESTED");
     }
 
     @Test
@@ -630,6 +646,77 @@ class EmojiApplicationTests {
                 .andExpect(jsonPath("$.data.failedReason").value("provider mock failure"));
     }
 
+    @Test
+    void internalCleanupExecutionShouldRequireInternalToken() throws Exception {
+        persistUser(CURRENT_USER_ID, "EMAIL", CURRENT_USER_EMAIL, 240, 0, "ACTIVE");
+
+        mockMvc.perform(post("/api/account/delete")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", bearerToken())
+                        .content("""
+                                {
+                                  "reason": "cleanup me",
+                                  "confirmText": "DELETE"
+                                }
+                                """))
+                .andExpect(status().isAccepted());
+
+        String cleanupJobId = accountCleanupJobRepository.findByUserId(CURRENT_USER_ID).orElseThrow().getId();
+
+        mockMvc.perform(post("/api/internal/account-cleanup/" + cleanupJobId + "/execute"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
+    }
+
+    @Test
+    void internalCleanupExecutionShouldFinalizeUserAndAssets() throws Exception {
+        persistUser(CURRENT_USER_ID, "EMAIL", CURRENT_USER_EMAIL, 240, 0, "ACTIVE");
+        persistGenerationTask("task_cleanup_2", CURRENT_USER_ID, "comic", sourceObjectKey("cleanup-finish.png"), "SUCCESS", 100, "", "emoji/generated/results/task_cleanup_2.png", false, "provider-cleanup-2");
+        persistMediaAsset("media_cleanup_2_source", CURRENT_USER_ID, "task_cleanup_2", sourceObjectKey("cleanup-finish.png"), "SOURCE");
+        persistMediaAsset("media_cleanup_2_result", CURRENT_USER_ID, "task_cleanup_2", "emoji/generated/results/task_cleanup_2.png", "RESULT");
+
+        mockMvc.perform(post("/api/account/delete")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", bearerToken())
+                        .content("""
+                                {
+                                  "reason": "erase account",
+                                  "confirmText": "DELETE"
+                                }
+                                """))
+                .andExpect(status().isAccepted());
+
+        String cleanupJobId = accountCleanupJobRepository.findByUserId(CURRENT_USER_ID).orElseThrow().getId();
+
+        mockMvc.perform(post("/api/internal/account-cleanup/" + cleanupJobId + "/execute")
+                        .header("X-Internal-Token", INTERNAL_API_TOKEN))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.cleanupJobId").value(cleanupJobId))
+                .andExpect(jsonPath("$.data.status").value("COMPLETED"))
+                .andExpect(jsonPath("$.data.generationTasksPurged").value(org.hamcrest.Matchers.greaterThanOrEqualTo(1)))
+                .andExpect(jsonPath("$.data.mediaAssetsMarkedDeleted").value(org.hamcrest.Matchers.greaterThanOrEqualTo(2)));
+
+        AppUserEntity deletedUser = userRepository.findById(CURRENT_USER_ID).orElseThrow();
+        assertThat(deletedUser.getStatus()).isEqualTo("DELETED");
+        assertThat(deletedUser.getEmail()).isNull();
+        assertThat(deletedUser.getExternalSubject()).isEqualTo("deleted:" + CURRENT_USER_ID);
+        assertThat(deletedUser.getDeletionCompletedAt()).isNotNull();
+
+        GenerationTaskEntity deletedTask = generationTaskRepository.findById("task_cleanup_2").orElseThrow();
+        assertThat(deletedTask.getLifecycleStatus()).isEqualTo("PURGED");
+        assertThat(deletedTask.isDeleted()).isTrue();
+        assertThat(deletedTask.getPurgedAt()).isNotNull();
+
+        assertThat(mediaAssetRepository.findAllByGenerationTaskIdOrderByCreatedAtAsc("task_cleanup_2"))
+                .extracting(MediaAssetEntity::getLifecycleStatus)
+                .containsOnly("DELETED");
+
+        assertThat(auditEventRepository.findAllByCleanupJobIdOrderByCreatedAtAsc(cleanupJobId))
+                .extracting(AuditEventEntity::getEventType)
+                .contains("ACCOUNT_DELETION_REQUESTED", "ACCOUNT_CLEANUP_STARTED", "ACCOUNT_CLEANUP_COMPLETED");
+    }
+
     private String bearerToken() {
         return "Bearer " + jwtTokenService.issueAccessToken(CURRENT_USER_ID, Map.of("provider", "EMAIL", "email", CURRENT_USER_EMAIL));
     }
@@ -676,9 +763,32 @@ class EmojiApplicationTests {
         task.setReservedCredits(0);
         task.setCreditStatus("NONE");
         task.setDeleted(deleted);
+        task.setLifecycleStatus("ACTIVE");
+        task.setPurgeScheduledAt(null);
+        task.setPurgedAt(null);
         task.setCreatedAt(now);
         task.setUpdatedAt(now);
         return generationTaskRepository.save(task);
+    }
+
+    private void persistMediaAsset(String mediaId, String ownerUserId, String generationTaskId, String objectKey, String role) {
+        Instant now = Instant.now();
+        MediaAssetEntity asset = new MediaAssetEntity();
+        asset.setId(mediaId);
+        asset.setObjectKey(objectKey);
+        asset.setAssetRole(role);
+        asset.setOwnerUserId(ownerUserId);
+        asset.setGenerationTaskId(generationTaskId);
+        asset.setProviderTaskId(null);
+        asset.setContentType("image/png");
+        asset.setPublicUrl("https://files.example.com/" + objectKey);
+        asset.setSourceStatus("ATTACHED");
+        asset.setLifecycleStatus("ACTIVE");
+        asset.setPurgeScheduledAt(null);
+        asset.setPurgedAt(null);
+        asset.setCreatedAt(now);
+        asset.setUpdatedAt(now);
+        mediaAssetRepository.save(asset);
     }
 
     private ResultActions postInternalStatus(String taskId, String content) throws Exception {

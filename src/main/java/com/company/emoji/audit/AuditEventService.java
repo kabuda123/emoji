@@ -27,4 +27,17 @@ public class AuditEventService {
         event.setCreatedAt(Instant.now());
         auditEventRepository.save(event);
     }
+
+    @Transactional
+    public void recordCleanup(String eventType, String actorType, String userId, String cleanupJobId, String payload) {
+        AuditEventEntity event = new AuditEventEntity();
+        event.setId("audit_" + UUID.randomUUID().toString().replace("-", ""));
+        event.setEventType(eventType);
+        event.setActorType(actorType);
+        event.setUserId(userId);
+        event.setCleanupJobId(cleanupJobId);
+        event.setPayload(payload);
+        event.setCreatedAt(Instant.now());
+        auditEventRepository.save(event);
+    }
 }

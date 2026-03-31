@@ -37,6 +37,9 @@ public class AppUserEntity {
     @Column(name = "deletion_scheduled_at")
     private Instant deletionScheduledAt;
 
+    @Column(name = "deletion_completed_at")
+    private Instant deletionCompletedAt;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -61,6 +64,8 @@ public class AppUserEntity {
     public void setDeletionRequestedAt(Instant deletionRequestedAt) { this.deletionRequestedAt = deletionRequestedAt; }
     public Instant getDeletionScheduledAt() { return deletionScheduledAt; }
     public void setDeletionScheduledAt(Instant deletionScheduledAt) { this.deletionScheduledAt = deletionScheduledAt; }
+    public Instant getDeletionCompletedAt() { return deletionCompletedAt; }
+    public void setDeletionCompletedAt(Instant deletionCompletedAt) { this.deletionCompletedAt = deletionCompletedAt; }
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }

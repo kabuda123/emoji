@@ -2,6 +2,7 @@ package com.company.emoji.media;
 
 import com.company.emoji.media.domain.MediaAssetRole;
 import com.company.emoji.media.domain.MediaAssetStatus;
+import com.company.emoji.media.domain.MediaLifecycleStatus;
 import com.company.emoji.media.entity.MediaAssetEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,6 +34,7 @@ public class MediaMetadataService {
         asset.setContentType(contentType);
         asset.setPublicUrl(mediaAssetService.toPublicUrl(objectKey));
         asset.setSourceStatus(MediaAssetStatus.POLICY_ISSUED.name());
+        asset.setLifecycleStatus(MediaLifecycleStatus.ACTIVE.name());
         asset.setUpdatedAt(now);
         mediaAssetRepository.save(asset);
     }
@@ -47,6 +49,7 @@ public class MediaMetadataService {
             asset.setObjectKey(objectKey);
             asset.setAssetRole(MediaAssetRole.SOURCE.name());
             asset.setPublicUrl(mediaAssetService.toPublicUrl(objectKey));
+            asset.setLifecycleStatus(MediaLifecycleStatus.ACTIVE.name());
         }
         asset.setOwnerUserId(ownerUserId);
         asset.setGenerationTaskId(generationTaskId);
@@ -82,6 +85,7 @@ public class MediaMetadataService {
             asset.setProviderTaskId(providerTaskId);
             asset.setPublicUrl(mediaAssetService.toPublicUrl(objectKey));
             asset.setSourceStatus(MediaAssetStatus.GENERATED.name());
+            asset.setLifecycleStatus(MediaLifecycleStatus.ACTIVE.name());
             asset.setUpdatedAt(now);
             mediaAssetRepository.save(asset);
         }

@@ -116,6 +116,12 @@ Request fields:
 Response fields:
 - `status`
 - `scheduledDeletionAt`
+- `cleanupJobId`
+
+Behavior:
+- server creates or refreshes a persisted cleanup job
+- user-owned generation tasks and media assets are marked `DELETION_SCHEDULED`
+- internal cleanup execution will later move them to terminal lifecycle states
 
 ### GET `/api/config/bootstrap`
 Response fields:
@@ -235,6 +241,16 @@ Behavior:
 - resolves the persisted task by `providerTaskId`
 - reuses the same internal state machine rules as the internal status endpoint
 - `previewUrls` / `resultUrls` may contain managed object keys; public task detail responses always return resolved URLs
+
+### POST `/api/internal/account-cleanup/{cleanupJobId}/execute`
+Authentication:
+- internal header `X-Internal-Token` required
+
+Behavior:
+- executes the persisted cleanup plan for the target user
+- marks owned generation tasks as `PURGED`
+- marks owned media assets as `DELETED`
+- updates the user status to `DELETED`
 
 ### GET `/api/history`
 Authentication:

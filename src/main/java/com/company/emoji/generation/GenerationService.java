@@ -3,6 +3,7 @@ package com.company.emoji.generation;
 import com.company.emoji.common.api.ApiErrorCode;
 import com.company.emoji.common.api.ApiException;
 import com.company.emoji.generation.domain.GenerationCreditStatus;
+import com.company.emoji.generation.domain.GenerationLifecycleStatus;
 import com.company.emoji.generation.domain.GenerationStatus;
 import com.company.emoji.generation.dto.CreateGenerationRequest;
 import com.company.emoji.generation.dto.CreateGenerationResponse;
@@ -175,6 +176,9 @@ public class GenerationService {
         task.setReservedCredits(reservedCredits);
         task.setCreditStatus(creditStatus.name());
         task.setDeleted(false);
+        task.setLifecycleStatus(GenerationLifecycleStatus.ACTIVE.name());
+        task.setPurgeScheduledAt(null);
+        task.setPurgedAt(null);
         task.setCreatedAt(now);
         task.setUpdatedAt(now);
         generationTaskRepository.save(task);

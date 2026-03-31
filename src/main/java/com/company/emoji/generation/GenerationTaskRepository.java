@@ -10,6 +10,7 @@ public interface GenerationTaskRepository extends JpaRepository<GenerationTaskEn
     Optional<GenerationTaskEntity> findByIdAndDeletedFalse(String id);
     Optional<GenerationTaskEntity> findFirstByUserIdAndIdempotencyKeyAndDeletedFalse(String userId, String idempotencyKey);
     List<GenerationTaskEntity> findAllByUserIdAndDeletedFalseOrderByCreatedAtDesc(String userId);
+    List<GenerationTaskEntity> findAllByUserIdOrderByCreatedAtAsc(String userId);
     Optional<GenerationTaskEntity> findByIdAndUserIdAndDeletedFalse(String id, String userId);
     Optional<GenerationTaskEntity> findByProviderTaskIdAndDeletedFalse(String providerTaskId);
 }
