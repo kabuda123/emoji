@@ -5,6 +5,8 @@ import com.company.emoji.generation.GenerationTaskRepository;
 import com.company.emoji.generation.entity.GenerationTaskEntity;
 import com.company.emoji.user.UserRepository;
 import com.company.emoji.user.entity.AppUserEntity;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -13,8 +15,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.test.web.servlet.ResultActions;
 
 import java.time.Instant;
 import java.util.Map;
@@ -221,25 +222,35 @@ class EmojiApplicationTests {
     void authenticatedCreateShouldAppearInHistory() throws Exception {
         persistUser(CURRENT_USER_ID, "EMAIL", CURRENT_USER_EMAIL, 240, 0, "ACTIVE");
 
-        MvcResult createResult = mockMvc.perform(post("/api/generations")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .header("Authorization", bearerToken())
-                        .content("""
-                                {
-                                  "templateId": "comic",
-                                  "inputObjectKey": "uploads/demo/auth-input.png",
-                                  "count": 2
-                                }
-                                """))
-                .andExpect(status().isAccepted())
-                .andReturn();
-
-        String taskId = responseValue(createResult, "/data/taskId");
+        String taskId = createAuthenticatedTask("comic", "uploads/demo/auth-input.png");
 
         mockMvc.perform(get("/api/history")
                         .header("Authorization", bearerToken()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[0].taskId").value(taskId));
+
+        AppUserEntity user = userRepository.findById(CURRENT_USER_ID).orElseThrow();
+        assertThat(user.getAvailableCredits()).isEqualTo(228);
+        assertThat(user.getFrozenCredits()).isEqualTo(12);
+    }
+
+    @Test
+    void authenticatedCreateShouldRejectInsufficientCredits() throws Exception {
+        persistUser(CURRENT_USER_ID, "EMAIL", CURRENT_USER_EMAIL, 4, 0, "ACTIVE");
+
+        mockMvc.perform(post("/api/generations")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", bearerToken())
+                        .content("""
+                                {
+                                  "templateId": "comic",
+                                  "inputObjectKey": "uploads/demo/no-balance.png",
+                                  "count": 2
+                                }
+                                """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("INSUFFICIENT_CREDITS"));
     }
 
     @Test
@@ -260,9 +271,10 @@ class EmojiApplicationTests {
 
     @Test
     void internalStatusUpdateShouldAdvanceLifecycleToSuccess() throws Exception {
-        persistGenerationTask("task_internal_2", null, "comic", "uploads/demo/internal2.png", "CREATED", 0, "https://example.com/previews/task_internal_2.png", "", false, null);
+        persistUser(CURRENT_USER_ID, "EMAIL", CURRENT_USER_EMAIL, 240, 0, "ACTIVE");
+        String taskId = createAuthenticatedTask("comic", "uploads/demo/internal2.png");
 
-        postInternalStatus("task_internal_2", """
+        postInternalStatus(taskId, """
                 {
                   "status": "AUDITING"
                 }
@@ -270,7 +282,7 @@ class EmojiApplicationTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("AUDITING"));
 
-        postInternalStatus("task_internal_2", """
+        postInternalStatus(taskId, """
                 {
                   "status": "READY_TO_DISPATCH"
                 }
@@ -278,7 +290,7 @@ class EmojiApplicationTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("READY_TO_DISPATCH"));
 
-        postInternalStatus("task_internal_2", """
+        postInternalStatus(taskId, """
                 {
                   "status": "RUNNING",
                   "providerTaskId": "provider-task-2",
@@ -290,7 +302,7 @@ class EmojiApplicationTests {
                 .andExpect(jsonPath("$.data.status").value("RUNNING"))
                 .andExpect(jsonPath("$.data.progressPercent").value(46));
 
-        postInternalStatus("task_internal_2", """
+        postInternalStatus(taskId, """
                 {
                   "status": "POST_PROCESSING",
                   "progressPercent": 95
@@ -299,7 +311,7 @@ class EmojiApplicationTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("POST_PROCESSING"));
 
-        postInternalStatus("task_internal_2", """
+        postInternalStatus(taskId, """
                 {
                   "status": "SUCCESS",
                   "resultUrls": ["https://example.com/results/task_internal_2-1.png"]
@@ -309,11 +321,15 @@ class EmojiApplicationTests {
                 .andExpect(jsonPath("$.data.status").value("SUCCESS"))
                 .andExpect(jsonPath("$.data.resultUrls[0]").value("https://example.com/results/task_internal_2-1.png"));
 
-        mockMvc.perform(get("/api/generations/task_internal_2"))
+        mockMvc.perform(get("/api/generations/" + taskId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("SUCCESS"))
                 .andExpect(jsonPath("$.data.progressPercent").value(100))
                 .andExpect(jsonPath("$.data.resultUrls[0]").value("https://example.com/results/task_internal_2-1.png"));
+
+        AppUserEntity user = userRepository.findById(CURRENT_USER_ID).orElseThrow();
+        assertThat(user.getAvailableCredits()).isEqualTo(228);
+        assertThat(user.getFrozenCredits()).isEqualTo(0);
     }
 
     @Test
@@ -333,9 +349,10 @@ class EmojiApplicationTests {
 
     @Test
     void internalStatusUpdateShouldRecordFailureReason() throws Exception {
-        persistGenerationTask("task_internal_4", null, "comic", "uploads/demo/internal4.png", "CREATED", 0, "https://example.com/previews/task_internal_4.png", "", false, null);
+        persistUser(CURRENT_USER_ID, "EMAIL", CURRENT_USER_EMAIL, 240, 0, "ACTIVE");
+        String taskId = createAuthenticatedTask("comic", "uploads/demo/internal4.png");
 
-        postInternalStatus("task_internal_4", """
+        postInternalStatus(taskId, """
                 {
                   "status": "FAILED",
                   "failedReason": "provider timeout"
@@ -344,6 +361,61 @@ class EmojiApplicationTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("FAILED"))
                 .andExpect(jsonPath("$.data.failedReason").value("provider timeout"));
+
+        AppUserEntity user = userRepository.findById(CURRENT_USER_ID).orElseThrow();
+        assertThat(user.getAvailableCredits()).isEqualTo(240);
+        assertThat(user.getFrozenCredits()).isEqualTo(0);
+    }
+
+    @Test
+    void refundedStatusShouldReturnConsumedCredits() throws Exception {
+        persistUser(CURRENT_USER_ID, "EMAIL", CURRENT_USER_EMAIL, 240, 0, "ACTIVE");
+        String taskId = createAuthenticatedTask("comic", "uploads/demo/internal5.png");
+
+        postInternalStatus(taskId, """
+                {
+                  "status": "AUDITING"
+                }
+                """).andExpect(status().isOk());
+
+        postInternalStatus(taskId, """
+                {
+                  "status": "READY_TO_DISPATCH"
+                }
+                """).andExpect(status().isOk());
+
+        postInternalStatus(taskId, """
+                {
+                  "status": "RUNNING",
+                  "providerTaskId": "provider-task-5",
+                  "progressPercent": 40
+                }
+                """).andExpect(status().isOk());
+
+        postInternalStatus(taskId, """
+                {
+                  "status": "POST_PROCESSING"
+                }
+                """).andExpect(status().isOk());
+
+        postInternalStatus(taskId, """
+                {
+                  "status": "SUCCESS",
+                  "resultUrls": ["https://example.com/results/task_internal_5.png"]
+                }
+                """).andExpect(status().isOk());
+
+        postInternalStatus(taskId, """
+                {
+                  "status": "REFUNDED"
+                }
+                """)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("REFUNDED"));
+
+        AppUserEntity user = userRepository.findById(CURRENT_USER_ID).orElseThrow();
+        assertThat(user.getAvailableCredits()).isEqualTo(240);
+        assertThat(user.getFrozenCredits()).isEqualTo(0);
     }
 
     private String bearerToken() {
@@ -389,13 +461,15 @@ class EmojiApplicationTests {
         task.setPreviewUrls(previewUrls);
         task.setResultUrls(resultUrls);
         task.setProviderTaskId(providerTaskId);
+        task.setReservedCredits(0);
+        task.setCreditStatus("NONE");
         task.setDeleted(deleted);
         task.setCreatedAt(now);
         task.setUpdatedAt(now);
         return generationTaskRepository.save(task);
     }
 
-    private org.springframework.test.web.servlet.ResultActions postInternalStatus(String taskId, String content) throws Exception {
+    private ResultActions postInternalStatus(String taskId, String content) throws Exception {
         return mockMvc.perform(post("/api/internal/generations/" + taskId + "/status")
                 .header("X-Internal-Token", INTERNAL_API_TOKEN)
                 .contentType(MediaType.APPLICATION_JSON)
@@ -405,5 +479,21 @@ class EmojiApplicationTests {
     private String responseValue(MvcResult result, String pointer) throws Exception {
         JsonNode jsonNode = OBJECT_MAPPER.readTree(result.getResponse().getContentAsString());
         return jsonNode.at(pointer).asText();
+    }
+
+    private String createAuthenticatedTask(String templateId, String inputObjectKey) throws Exception {
+        MvcResult result = mockMvc.perform(post("/api/generations")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", bearerToken())
+                        .content("""
+                                {
+                                  "templateId": "%s",
+                                  "inputObjectKey": "%s",
+                                  "count": 2
+                                }
+                                """.formatted(templateId, inputObjectKey)))
+                .andExpect(status().isAccepted())
+                .andReturn();
+        return responseValue(result, "/data/taskId");
     }
 }

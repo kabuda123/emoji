@@ -2,6 +2,7 @@ package com.company.emoji.generation;
 
 import com.company.emoji.common.api.ApiErrorCode;
 import com.company.emoji.common.api.ApiException;
+import com.company.emoji.generation.domain.GenerationCreditStatus;
 import com.company.emoji.generation.domain.GenerationStatus;
 import com.company.emoji.generation.dto.CreateGenerationRequest;
 import com.company.emoji.generation.dto.CreateGenerationResponse;
@@ -112,6 +113,7 @@ public class GenerationService {
                 if (request.resultUrls() == null || request.resultUrls().isEmpty()) {
                     throw new ApiException(ApiErrorCode.VALIDATION_ERROR, HttpStatus.BAD_REQUEST, "resultUrls are required for SUCCESS");
                 }
+                settleCreditsOnSuccess(task);
                 task.setProgressPercent(100);
                 task.setResultUrls(joinCsv(request.resultUrls()));
                 task.setFailedReason(null);
@@ -120,10 +122,14 @@ public class GenerationService {
                 if (request.failedReason() == null || request.failedReason().isBlank()) {
                     throw new ApiException(ApiErrorCode.VALIDATION_ERROR, HttpStatus.BAD_REQUEST, "failedReason is required for FAILED");
                 }
+                releaseCreditsOnFailure(task);
                 task.setFailedReason(request.failedReason().trim());
                 task.setProgressPercent(normalizeProgress(request.progressPercent(), task.getProgressPercent(), 99));
             }
-            case REFUNDED -> task.setProgressPercent(100);
+            case REFUNDED -> {
+                refundCredits(task);
+                task.setProgressPercent(100);
+            }
             case CREATED -> throw new ApiException(ApiErrorCode.CONFLICT, HttpStatus.CONFLICT, "Internal status update cannot move task back to CREATED");
         }
 
@@ -136,6 +142,14 @@ public class GenerationService {
 
     private CreateGenerationResponse createTask(String userId, StyleTemplateEntity template, CreateGenerationRequest request, String idempotencyKey) {
         Instant now = Instant.now();
+        int reservedCredits = 0;
+        GenerationCreditStatus creditStatus = GenerationCreditStatus.NONE;
+        if (userId != null) {
+            reservedCredits = template.getPriceCredits();
+            userAccountService.reserveCredits(userId, reservedCredits);
+            creditStatus = GenerationCreditStatus.RESERVED;
+        }
+
         GenerationTaskEntity task = new GenerationTaskEntity();
         task.setId("task_" + UUID.randomUUID().toString().replace("-", ""));
         task.setUserId(userId);
@@ -149,6 +163,8 @@ public class GenerationService {
         task.setFailedReason(null);
         task.setIdempotencyKey(blankToNull(idempotencyKey));
         task.setProviderTaskId(null);
+        task.setReservedCredits(reservedCredits);
+        task.setCreditStatus(creditStatus.name());
         task.setDeleted(false);
         task.setCreatedAt(now);
         task.setUpdatedAt(now);
@@ -214,6 +230,44 @@ public class GenerationService {
             return null;
         }
         return value;
+    }
+
+    private void settleCreditsOnSuccess(GenerationTaskEntity task) {
+        if (task.getUserId() == null || task.getReservedCredits() <= 0) {
+            return;
+        }
+        GenerationCreditStatus creditStatus = GenerationCreditStatus.valueOf(task.getCreditStatus());
+        if (creditStatus == GenerationCreditStatus.RESERVED) {
+            userAccountService.consumeReservedCredits(task.getUserId(), task.getReservedCredits());
+            task.setCreditStatus(GenerationCreditStatus.CONSUMED.name());
+        }
+    }
+
+    private void releaseCreditsOnFailure(GenerationTaskEntity task) {
+        if (task.getUserId() == null || task.getReservedCredits() <= 0) {
+            return;
+        }
+        GenerationCreditStatus creditStatus = GenerationCreditStatus.valueOf(task.getCreditStatus());
+        if (creditStatus == GenerationCreditStatus.RESERVED) {
+            userAccountService.releaseReservedCredits(task.getUserId(), task.getReservedCredits());
+            task.setCreditStatus(GenerationCreditStatus.RELEASED.name());
+        }
+    }
+
+    private void refundCredits(GenerationTaskEntity task) {
+        if (task.getUserId() == null || task.getReservedCredits() <= 0) {
+            return;
+        }
+        GenerationCreditStatus creditStatus = GenerationCreditStatus.valueOf(task.getCreditStatus());
+        if (creditStatus == GenerationCreditStatus.CONSUMED) {
+            userAccountService.refundConsumedCredits(task.getUserId(), task.getReservedCredits());
+            task.setCreditStatus(GenerationCreditStatus.RELEASED.name());
+            return;
+        }
+        if (creditStatus == GenerationCreditStatus.RESERVED) {
+            userAccountService.releaseReservedCredits(task.getUserId(), task.getReservedCredits());
+            task.setCreditStatus(GenerationCreditStatus.RELEASED.name());
+        }
     }
 
     private void requireProviderTaskId(GenerationTaskEntity task) {

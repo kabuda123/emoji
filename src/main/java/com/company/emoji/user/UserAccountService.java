@@ -64,6 +64,57 @@ public class UserAccountService {
         return new DeleteAccountResponse("SCHEDULED", scheduledDeletionAt);
     }
 
+    @Transactional
+    public void reserveCredits(String userId, int credits) {
+        if (credits <= 0) {
+            return;
+        }
+        AppUserEntity user = requireActiveUser(userId);
+        if (user.getAvailableCredits() < credits) {
+            throw new ApiException(ApiErrorCode.INSUFFICIENT_CREDITS, HttpStatus.CONFLICT, "Insufficient available credits");
+        }
+        user.setAvailableCredits(user.getAvailableCredits() - credits);
+        user.setFrozenCredits(user.getFrozenCredits() + credits);
+        user.setUpdatedAt(Instant.now());
+    }
+
+    @Transactional
+    public void consumeReservedCredits(String userId, int credits) {
+        if (credits <= 0) {
+            return;
+        }
+        AppUserEntity user = requireActiveUser(userId);
+        if (user.getFrozenCredits() < credits) {
+            throw new ApiException(ApiErrorCode.CONFLICT, HttpStatus.CONFLICT, "Reserved credits are inconsistent");
+        }
+        user.setFrozenCredits(user.getFrozenCredits() - credits);
+        user.setUpdatedAt(Instant.now());
+    }
+
+    @Transactional
+    public void releaseReservedCredits(String userId, int credits) {
+        if (credits <= 0) {
+            return;
+        }
+        AppUserEntity user = requireActiveUser(userId);
+        if (user.getFrozenCredits() < credits) {
+            throw new ApiException(ApiErrorCode.CONFLICT, HttpStatus.CONFLICT, "Reserved credits are inconsistent");
+        }
+        user.setFrozenCredits(user.getFrozenCredits() - credits);
+        user.setAvailableCredits(user.getAvailableCredits() + credits);
+        user.setUpdatedAt(Instant.now());
+    }
+
+    @Transactional
+    public void refundConsumedCredits(String userId, int credits) {
+        if (credits <= 0) {
+            return;
+        }
+        AppUserEntity user = requireActiveUser(userId);
+        user.setAvailableCredits(user.getAvailableCredits() + credits);
+        user.setUpdatedAt(Instant.now());
+    }
+
     private UserLoginResult findOrCreateUser(String provider, String externalSubject, String email) {
         return userRepository.findByProviderAndExternalSubject(provider, externalSubject)
                 .map(user -> {

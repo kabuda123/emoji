@@ -13,6 +13,7 @@ The current implementation keeps the URL, method, core DTOs, and response envelo
 - Email login and Apple login now create or reuse a persisted user record on the server side.
 - Generation tasks are now persisted. Authenticated requests are attached to the current user; anonymous requests remain queryable by task ID but are not included in protected history APIs.
 - Internal task orchestration now uses a dedicated status-update endpoint protected by `X-Internal-Token`.
+- Authenticated generation requests now reserve template credits at creation time. `SUCCESS` confirms the deduction; `FAILED` and `REFUNDED` release the reserved amount back to the user account.
 
 ## Response envelope
 
@@ -50,6 +51,7 @@ Error:
 - `VALIDATION_ERROR`
 - `UNAUTHORIZED`
 - `FORBIDDEN`
+- `INSUFFICIENT_CREDITS`
 - `NOT_FOUND`
 - `CONFLICT`
 - `INTERNAL_ERROR`
@@ -169,6 +171,7 @@ Response fields:
 - `status`
 - `pollAfterSeconds`
 - authenticated requests persist the task under the current user when a bearer token is present
+- authenticated requests reserve `template.priceCredits` from the user balance; insufficient balance returns `INSUFFICIENT_CREDITS`
 
 ### GET `/api/generations/{taskId}`
 Response fields:
@@ -239,3 +242,4 @@ Response fields:
 - `frozenCredits`
 - `currency`
 - current skeleton reads these values from persisted user account fields
+- `frozenCredits` reflects reserved generation spend not yet settled

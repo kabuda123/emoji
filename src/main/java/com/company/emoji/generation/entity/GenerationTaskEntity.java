@@ -46,6 +46,12 @@ public class GenerationTaskEntity {
     @Column(name = "provider_task_id")
     private String providerTaskId;
 
+    @Column(name = "reserved_credits", nullable = false)
+    private int reservedCredits;
+
+    @Column(name = "credit_status", nullable = false)
+    private String creditStatus;
+
     @Column(nullable = false)
     private boolean deleted;
 
@@ -79,6 +85,10 @@ public class GenerationTaskEntity {
     public void setIdempotencyKey(String idempotencyKey) { this.idempotencyKey = idempotencyKey; }
     public String getProviderTaskId() { return providerTaskId; }
     public void setProviderTaskId(String providerTaskId) { this.providerTaskId = providerTaskId; }
+    public int getReservedCredits() { return reservedCredits; }
+    public void setReservedCredits(int reservedCredits) { this.reservedCredits = reservedCredits; }
+    public String getCreditStatus() { return creditStatus; }
+    public void setCreditStatus(String creditStatus) { this.creditStatus = creditStatus; }
     public boolean isDeleted() { return deleted; }
     public void setDeleted(boolean deleted) { this.deleted = deleted; }
     public Instant getCreatedAt() { return createdAt; }
