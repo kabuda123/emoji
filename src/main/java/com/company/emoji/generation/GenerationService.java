@@ -8,6 +8,7 @@ import com.company.emoji.generation.dto.CreateGenerationResponse;
 import com.company.emoji.generation.dto.DeleteHistoryResponse;
 import com.company.emoji.generation.dto.GenerationDetailResponse;
 import com.company.emoji.generation.dto.HistoryItemResponse;
+import com.company.emoji.user.UserAccountService;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
@@ -17,6 +18,11 @@ import java.util.UUID;
 
 @Service
 public class GenerationService {
+    private final UserAccountService userAccountService;
+
+    public GenerationService(UserAccountService userAccountService) {
+        this.userAccountService = userAccountService;
+    }
 
     public CreateGenerationResponse create(CreateGenerationRequest request, String idempotencyKey) {
         return new CreateGenerationResponse(
@@ -41,6 +47,7 @@ public class GenerationService {
     }
 
     public List<HistoryItemResponse> listHistory(String userId) {
+        userAccountService.requireActiveUser(userId);
         return List.of(
                 new HistoryItemResponse("task_" + userId + "_1", "Comic Style", GenerationStatus.SUCCESS, "https://example.com/history/task_demo_1-cover.png", Instant.now()),
                 new HistoryItemResponse("task_" + userId + "_2", "Sticker Style", GenerationStatus.RUNNING, "https://example.com/history/task_demo_2-cover.png", Instant.now().minusSeconds(600))
@@ -48,6 +55,7 @@ public class GenerationService {
     }
 
     public DeleteHistoryResponse deleteHistory(String userId, String historyId) {
+        userAccountService.requireActiveUser(userId);
         return new DeleteHistoryResponse(true, historyId + "@" + userId);
     }
 }

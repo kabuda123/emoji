@@ -4,13 +4,15 @@ import com.company.emoji.user.dto.DeleteAccountRequest;
 import com.company.emoji.user.dto.DeleteAccountResponse;
 import org.springframework.stereotype.Service;
 
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
-
 @Service
 public class AccountService {
+    private final UserAccountService userAccountService;
+
+    public AccountService(UserAccountService userAccountService) {
+        this.userAccountService = userAccountService;
+    }
 
     public DeleteAccountResponse requestDeletion(String userId, DeleteAccountRequest request) {
-        return new DeleteAccountResponse("SCHEDULED", Instant.now().plus(7, ChronoUnit.DAYS));
+        return userAccountService.requestDeletion(userId, request);
     }
 }

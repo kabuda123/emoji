@@ -10,6 +10,7 @@ The current implementation keeps the URL, method, core DTOs, and response envelo
 - Idempotent create endpoints may send `Idempotency-Key`
 - Public endpoints remain open for bootstrap, auth, template browsing, upload policy, generation create/detail, and IAP verify.
 - Protected endpoints now require a valid access token. Missing or invalid bearer token returns `401`; authenticated but disallowed access returns `403`.
+- Email login and Apple login now create or reuse a persisted user record on the server side.
 
 ## Response envelope
 
@@ -73,6 +74,7 @@ Response fields:
 - `refreshToken`
 - `expiresIn`
 - `isNewUser`
+- server will create a new user row on first successful login
 
 ### POST `/api/auth/email/send-code`
 Request fields:
@@ -94,6 +96,7 @@ Response fields:
 - `refreshToken`
 - `expiresIn`
 - `isNewUser`
+- server will create a new user row on first successful login
 
 ### POST `/api/account/delete`
 Authentication:
@@ -213,3 +216,4 @@ Response fields:
 - `availableCredits`
 - `frozenCredits`
 - `currency`
+- current skeleton reads these values from persisted user account fields

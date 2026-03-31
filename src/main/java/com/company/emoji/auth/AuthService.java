@@ -8,6 +8,8 @@ import com.company.emoji.auth.dto.EmailSendCodeResponse;
 import com.company.emoji.common.api.ApiErrorCode;
 import com.company.emoji.common.api.ApiException;
 import com.company.emoji.common.config.AuthProperties;
+import com.company.emoji.user.UserAccountService;
+import com.company.emoji.user.UserLoginResult;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
@@ -23,16 +25,24 @@ public class AuthService {
     private final AuthProperties authProperties;
     private final EmailCodeStore emailCodeStore;
     private final JwtTokenService jwtTokenService;
+    private final UserAccountService userAccountService;
 
-    public AuthService(AuthProperties authProperties, EmailCodeStore emailCodeStore, JwtTokenService jwtTokenService) {
+    public AuthService(
+            AuthProperties authProperties,
+            EmailCodeStore emailCodeStore,
+            JwtTokenService jwtTokenService,
+            UserAccountService userAccountService
+    ) {
         this.authProperties = authProperties;
         this.emailCodeStore = emailCodeStore;
         this.jwtTokenService = jwtTokenService;
+        this.userAccountService = userAccountService;
     }
 
     public AuthSessionResponse loginWithApple(AppleLoginRequest request) {
-        String userId = "usr_apple_" + hash(request.identityToken()).substring(0, 12);
-        return issueSession(userId, Map.of("provider", "APPLE"), false);
+        String externalSubject = hash(request.identityToken());
+        UserLoginResult loginResult = userAccountService.findOrCreateAppleUser(externalSubject);
+        return issueSession(loginResult.userId(), Map.of("provider", "APPLE"), loginResult.isNewUser());
     }
 
     public EmailSendCodeResponse sendEmailCode(EmailSendCodeRequest request) {
@@ -54,11 +64,11 @@ public class AuthService {
         }
 
         String normalizedEmail = request.email().trim().toLowerCase();
-        String userId = "usr_email_" + hash(normalizedEmail).substring(0, 12);
+        UserLoginResult loginResult = userAccountService.findOrCreateEmailUser(normalizedEmail);
         Map<String, Object> claims = new HashMap<>();
         claims.put("provider", "EMAIL");
         claims.put("email", normalizedEmail);
-        return issueSession(userId, claims, false);
+        return issueSession(loginResult.userId(), claims, loginResult.isNewUser());
     }
 
     private AuthSessionResponse issueSession(String userId, Map<String, Object> claims, boolean isNewUser) {

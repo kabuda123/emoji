@@ -1,6 +1,8 @@
 package com.company.emoji;
 
 import com.company.emoji.auth.JwtTokenService;
+import com.company.emoji.user.UserRepository;
+import com.company.emoji.user.entity.AppUserEntity;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -8,9 +10,12 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 
+import java.time.Instant;
 import java.util.Map;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -22,12 +27,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class EmojiApplicationTests {
+    private static final String CURRENT_USER_ID = "usr_test_123";
+    private static final String CURRENT_USER_EMAIL = "current.user@example.com";
 
     @Autowired
     private MockMvc mockMvc;
 
     @Autowired
     private JwtTokenService jwtTokenService;
+
+    @Autowired
+    private UserRepository userRepository;
 
     @Test
     void bootstrapShouldReturnEnvelope() throws Exception {
@@ -97,6 +107,8 @@ class EmojiApplicationTests {
                 .andExpect(jsonPath("$.data.userId").exists())
                 .andExpect(jsonPath("$.data.accessToken").isString())
                 .andExpect(jsonPath("$.data.refreshToken").isString());
+
+        assertThat(userRepository.findByProviderAndExternalSubject("EMAIL", "demo@example.com")).isPresent();
     }
 
     @Test
@@ -109,11 +121,13 @@ class EmojiApplicationTests {
 
     @Test
     void historyShouldAcceptValidBearerToken() throws Exception {
+        persistUser(CURRENT_USER_ID, "EMAIL", CURRENT_USER_EMAIL, 240, 0, "ACTIVE");
+
         mockMvc.perform(get("/api/history")
                         .header("Authorization", bearerToken()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data[0].taskId").value("task_usr_test_123_1"));
+                .andExpect(jsonPath("$.data[0].taskId").value("task_" + CURRENT_USER_ID + "_1"));
     }
 
     @Test
@@ -126,7 +140,22 @@ class EmojiApplicationTests {
     }
 
     @Test
+    void creditsBalanceShouldUsePersistedUserAccount() throws Exception {
+        persistUser(CURRENT_USER_ID, "EMAIL", CURRENT_USER_EMAIL, 321, 12, "ACTIVE");
+
+        mockMvc.perform(get("/api/credits/balance")
+                        .header("Authorization", bearerToken()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.availableCredits").value(321))
+                .andExpect(jsonPath("$.data.frozenCredits").value(12))
+                .andExpect(jsonPath("$.data.currency").value("CREDITS"));
+    }
+
+    @Test
     void deleteAccountShouldRequireValidBearerToken() throws Exception {
+        persistUser(CURRENT_USER_ID, "EMAIL", CURRENT_USER_EMAIL, 240, 0, "ACTIVE");
+
         mockMvc.perform(post("/api/account/delete")
                         .contentType(MediaType.APPLICATION_JSON)
                         .header("Authorization", bearerToken())
@@ -139,18 +168,39 @@ class EmojiApplicationTests {
                 .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.status").value("SCHEDULED"));
+
+        AppUserEntity user = userRepository.findById(CURRENT_USER_ID).orElseThrow();
+        assertThat(user.getStatus()).isEqualTo("DELETION_REQUESTED");
+        assertThat(user.getDeletionScheduledAt()).isNotNull();
     }
 
     @Test
     void deleteHistoryShouldReturnUserScopedIdentifier() throws Exception {
+        persistUser(CURRENT_USER_ID, "EMAIL", CURRENT_USER_EMAIL, 240, 0, "ACTIVE");
+
         mockMvc.perform(delete("/api/history/task_demo_1")
                         .header("Authorization", bearerToken()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.historyId").value("task_demo_1@usr_test_123"));
+                .andExpect(jsonPath("$.data.historyId").value("task_demo_1@" + CURRENT_USER_ID));
     }
 
     private String bearerToken() {
-        return "Bearer " + jwtTokenService.issueAccessToken("usr_test_123", Map.of("provider", "EMAIL", "email", "demo@example.com"));
+        return "Bearer " + jwtTokenService.issueAccessToken(CURRENT_USER_ID, Map.of("provider", "EMAIL", "email", CURRENT_USER_EMAIL));
+    }
+
+    private void persistUser(String userId, String provider, String email, int availableCredits, int frozenCredits, String status) {
+        Instant now = Instant.now();
+        AppUserEntity user = new AppUserEntity();
+        user.setId(userId);
+        user.setProvider(provider);
+        user.setExternalSubject(email);
+        user.setEmail(email);
+        user.setStatus(status);
+        user.setAvailableCredits(availableCredits);
+        user.setFrozenCredits(frozenCredits);
+        user.setCreatedAt(now);
+        user.setUpdatedAt(now);
+        userRepository.save(user);
     }
 }
