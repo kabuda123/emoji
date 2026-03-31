@@ -18,6 +18,7 @@ The current implementation keeps the URL, method, core DTOs, and response envelo
 - Media handling now uses managed object keys. Public APIs return resolved URLs while internal/provider flows may pass storage object keys.
 - Source uploads, generated assets, and provider callbacks are now persisted as metadata/audit records for traceability.
 - IAP verification now requires authentication, persists orders, grants credits, and treats `transactionId` as an idempotency key.
+- Credit mutations are now persisted to a unified ledger for IAP grants and generation reserve/consume/release/refund flows.
 
 ## Response envelope
 
@@ -305,3 +306,4 @@ Response fields:
 - `currency`
 - current skeleton reads these values from persisted user account fields
 - `frozenCredits` reflects reserved generation spend not yet settled
+- all balance-changing operations are also written to the internal credit ledger

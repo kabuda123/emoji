@@ -3,6 +3,7 @@ package com.company.emoji.user;
 import com.company.emoji.common.api.ApiErrorCode;
 import com.company.emoji.common.api.ApiException;
 import com.company.emoji.payment.dto.CreditBalanceResponse;
+import com.company.emoji.user.domain.CreditLedgerEntryType;
 import com.company.emoji.user.dto.DeleteAccountRequest;
 import com.company.emoji.user.dto.DeleteAccountResponse;
 import com.company.emoji.user.entity.AppUserEntity;
@@ -22,10 +23,16 @@ public class UserAccountService {
 
     private final UserRepository userRepository;
     private final AccountCleanupService accountCleanupService;
+    private final CreditLedgerService creditLedgerService;
 
-    public UserAccountService(UserRepository userRepository, AccountCleanupService accountCleanupService) {
+    public UserAccountService(
+            UserRepository userRepository,
+            AccountCleanupService accountCleanupService,
+            CreditLedgerService creditLedgerService
+    ) {
         this.userRepository = userRepository;
         this.accountCleanupService = accountCleanupService;
+        this.creditLedgerService = creditLedgerService;
     }
 
     @Transactional
@@ -67,7 +74,7 @@ public class UserAccountService {
     }
 
     @Transactional
-    public void reserveCredits(String userId, int credits) {
+    public void reserveCredits(String userId, int credits, String generationTaskId) {
         if (credits <= 0) {
             return;
         }
@@ -78,10 +85,21 @@ public class UserAccountService {
         user.setAvailableCredits(user.getAvailableCredits() - credits);
         user.setFrozenCredits(user.getFrozenCredits() + credits);
         user.setUpdatedAt(Instant.now());
+        creditLedgerService.record(
+                userId,
+                CreditLedgerEntryType.GENERATION_RESERVE,
+                -credits,
+                credits,
+                user.getAvailableCredits(),
+                user.getFrozenCredits(),
+                generationTaskId,
+                null,
+                "generation reserve"
+        );
     }
 
     @Transactional
-    public void consumeReservedCredits(String userId, int credits) {
+    public void consumeReservedCredits(String userId, int credits, String generationTaskId) {
         if (credits <= 0) {
             return;
         }
@@ -91,10 +109,21 @@ public class UserAccountService {
         }
         user.setFrozenCredits(user.getFrozenCredits() - credits);
         user.setUpdatedAt(Instant.now());
+        creditLedgerService.record(
+                userId,
+                CreditLedgerEntryType.GENERATION_CONSUME,
+                0,
+                -credits,
+                user.getAvailableCredits(),
+                user.getFrozenCredits(),
+                generationTaskId,
+                null,
+                "generation consume"
+        );
     }
 
     @Transactional
-    public void releaseReservedCredits(String userId, int credits) {
+    public void releaseReservedCredits(String userId, int credits, String generationTaskId) {
         if (credits <= 0) {
             return;
         }
@@ -105,26 +134,59 @@ public class UserAccountService {
         user.setFrozenCredits(user.getFrozenCredits() - credits);
         user.setAvailableCredits(user.getAvailableCredits() + credits);
         user.setUpdatedAt(Instant.now());
+        creditLedgerService.record(
+                userId,
+                CreditLedgerEntryType.GENERATION_RELEASE,
+                credits,
+                -credits,
+                user.getAvailableCredits(),
+                user.getFrozenCredits(),
+                generationTaskId,
+                null,
+                "generation release"
+        );
     }
 
     @Transactional
-    public void refundConsumedCredits(String userId, int credits) {
+    public void refundConsumedCredits(String userId, int credits, String generationTaskId) {
         if (credits <= 0) {
             return;
         }
         AppUserEntity user = requireActiveUser(userId);
         user.setAvailableCredits(user.getAvailableCredits() + credits);
         user.setUpdatedAt(Instant.now());
+        creditLedgerService.record(
+                userId,
+                CreditLedgerEntryType.GENERATION_REFUND,
+                credits,
+                0,
+                user.getAvailableCredits(),
+                user.getFrozenCredits(),
+                generationTaskId,
+                null,
+                "generation refund"
+        );
     }
 
     @Transactional
-    public int grantCredits(String userId, int credits) {
+    public int grantCredits(String userId, int credits, String iapOrderId) {
         if (credits <= 0) {
             return requireActiveUser(userId).getAvailableCredits();
         }
         AppUserEntity user = requireActiveUser(userId);
         user.setAvailableCredits(user.getAvailableCredits() + credits);
         user.setUpdatedAt(Instant.now());
+        creditLedgerService.record(
+                userId,
+                CreditLedgerEntryType.IAP_GRANT,
+                credits,
+                0,
+                user.getAvailableCredits(),
+                user.getFrozenCredits(),
+                null,
+                iapOrderId,
+                "iap grant"
+        );
         return user.getAvailableCredits();
     }
 

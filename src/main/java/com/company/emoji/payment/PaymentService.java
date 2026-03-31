@@ -62,7 +62,6 @@ public class PaymentService {
     private VerifyIapResponse createOrder(String userId, VerifyIapRequest request) {
         Instant now = Instant.now();
         int creditsGranted = creditsForProduct(request.productId());
-        int balanceAfter = userAccountService.grantCredits(userId, creditsGranted);
 
         IapOrderEntity order = new IapOrderEntity();
         order.setId("iap_" + UUID.randomUUID().toString().replace("-", ""));
@@ -72,10 +71,14 @@ public class PaymentService {
         order.setReceiptData(request.receiptData());
         order.setStatus(ORDER_STATUS_VERIFIED);
         order.setCreditsGranted(creditsGranted);
-        order.setBalanceAfter(balanceAfter);
+        order.setBalanceAfter(0);
         order.setVerifiedAt(now);
         order.setCreatedAt(now);
         order.setUpdatedAt(now);
+        iapOrderRepository.save(order);
+        int balanceAfter = userAccountService.grantCredits(userId, creditsGranted, order.getId());
+        order.setBalanceAfter(balanceAfter);
+        order.setUpdatedAt(Instant.now());
         iapOrderRepository.save(order);
 
         auditEventService.recordUser(

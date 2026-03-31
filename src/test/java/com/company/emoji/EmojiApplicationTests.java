@@ -8,7 +8,9 @@ import com.company.emoji.generation.entity.GenerationTaskEntity;
 import com.company.emoji.media.MediaAssetRepository;
 import com.company.emoji.media.entity.MediaAssetEntity;
 import com.company.emoji.user.AccountCleanupJobRepository;
+import com.company.emoji.user.CreditLedgerRepository;
 import com.company.emoji.user.UserRepository;
+import com.company.emoji.user.entity.CreditLedgerEntryEntity;
 import com.company.emoji.user.entity.AccountCleanupJobEntity;
 import com.company.emoji.user.entity.AppUserEntity;
 import com.company.emoji.payment.IapOrderRepository;
@@ -64,6 +66,9 @@ class EmojiApplicationTests {
 
     @Autowired
     private MediaAssetRepository mediaAssetRepository;
+
+    @Autowired
+    private CreditLedgerRepository creditLedgerRepository;
 
     @Autowired
     private IapOrderRepository iapOrderRepository;
@@ -289,6 +294,9 @@ class EmojiApplicationTests {
         assertThat(auditEventRepository.findAllByUserIdOrderByCreatedAtAsc(CURRENT_USER_ID))
                 .extracting(AuditEventEntity::getEventType)
                 .contains("IAP_VERIFIED");
+        assertThat(creditLedgerRepository.findAllByIapOrderIdOrderByCreatedAtAsc(order.getId()))
+                .extracting(CreditLedgerEntryEntity::getEntryType, CreditLedgerEntryEntity::getAvailableDelta, CreditLedgerEntryEntity::getFrozenDelta)
+                .contains(tuple("IAP_GRANT", 120, 0));
     }
 
     @Test
@@ -328,6 +336,7 @@ class EmojiApplicationTests {
         assertThat(auditEventRepository.findAllByUserIdOrderByCreatedAtAsc(CURRENT_USER_ID))
                 .extracting(AuditEventEntity::getEventType)
                 .contains("IAP_VERIFIED", "IAP_VERIFY_REPLAYED");
+        assertThat(creditLedgerRepository.findAllByIapOrderIdOrderByCreatedAtAsc(orderId)).hasSize(1);
     }
 
     @Test
@@ -391,6 +400,9 @@ class EmojiApplicationTests {
         AppUserEntity user = userRepository.findById(CURRENT_USER_ID).orElseThrow();
         assertThat(user.getAvailableCredits()).isEqualTo(228);
         assertThat(user.getFrozenCredits()).isEqualTo(12);
+        assertThat(creditLedgerRepository.findAllByGenerationTaskIdOrderByCreatedAtAsc(taskId))
+                .extracting(CreditLedgerEntryEntity::getEntryType, CreditLedgerEntryEntity::getAvailableDelta, CreditLedgerEntryEntity::getFrozenDelta)
+                .contains(tuple("GENERATION_RESERVE", -12, 12));
 
         MediaAssetEntity sourceAsset = mediaAssetRepository.findByObjectKey(sourceObjectKey("auth-input.png")).orElseThrow();
         assertThat(sourceAsset.getGenerationTaskId()).isEqualTo(taskId);
@@ -544,6 +556,9 @@ class EmojiApplicationTests {
         AppUserEntity user = userRepository.findById(CURRENT_USER_ID).orElseThrow();
         assertThat(user.getAvailableCredits()).isEqualTo(240);
         assertThat(user.getFrozenCredits()).isEqualTo(0);
+        assertThat(creditLedgerRepository.findAllByGenerationTaskIdOrderByCreatedAtAsc(taskId))
+                .extracting(CreditLedgerEntryEntity::getEntryType)
+                .contains("GENERATION_RESERVE", "GENERATION_RELEASE");
     }
 
     @Test
@@ -595,6 +610,9 @@ class EmojiApplicationTests {
         AppUserEntity user = userRepository.findById(CURRENT_USER_ID).orElseThrow();
         assertThat(user.getAvailableCredits()).isEqualTo(240);
         assertThat(user.getFrozenCredits()).isEqualTo(0);
+        assertThat(creditLedgerRepository.findAllByGenerationTaskIdOrderByCreatedAtAsc(taskId))
+                .extracting(CreditLedgerEntryEntity::getEntryType)
+                .contains("GENERATION_RESERVE", "GENERATION_CONSUME", "GENERATION_REFUND");
     }
 
     @Test

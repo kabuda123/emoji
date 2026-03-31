@@ -156,7 +156,6 @@ public class GenerationService {
         GenerationCreditStatus creditStatus = GenerationCreditStatus.NONE;
         if (userId != null) {
             reservedCredits = template.getPriceCredits();
-            userAccountService.reserveCredits(userId, reservedCredits);
             creditStatus = GenerationCreditStatus.RESERVED;
         }
 
@@ -182,6 +181,9 @@ public class GenerationService {
         task.setCreatedAt(now);
         task.setUpdatedAt(now);
         generationTaskRepository.save(task);
+        if (userId != null) {
+            userAccountService.reserveCredits(userId, reservedCredits, task.getId());
+        }
         mediaMetadataService.attachSourceToTask(userId, task.getId(), request.inputObjectKey());
         return toCreateResponse(task);
     }
@@ -252,7 +254,7 @@ public class GenerationService {
         }
         GenerationCreditStatus creditStatus = GenerationCreditStatus.valueOf(task.getCreditStatus());
         if (creditStatus == GenerationCreditStatus.RESERVED) {
-            userAccountService.consumeReservedCredits(task.getUserId(), task.getReservedCredits());
+            userAccountService.consumeReservedCredits(task.getUserId(), task.getReservedCredits(), task.getId());
             task.setCreditStatus(GenerationCreditStatus.CONSUMED.name());
         }
     }
@@ -263,7 +265,7 @@ public class GenerationService {
         }
         GenerationCreditStatus creditStatus = GenerationCreditStatus.valueOf(task.getCreditStatus());
         if (creditStatus == GenerationCreditStatus.RESERVED) {
-            userAccountService.releaseReservedCredits(task.getUserId(), task.getReservedCredits());
+            userAccountService.releaseReservedCredits(task.getUserId(), task.getReservedCredits(), task.getId());
             task.setCreditStatus(GenerationCreditStatus.RELEASED.name());
         }
     }
@@ -274,12 +276,12 @@ public class GenerationService {
         }
         GenerationCreditStatus creditStatus = GenerationCreditStatus.valueOf(task.getCreditStatus());
         if (creditStatus == GenerationCreditStatus.CONSUMED) {
-            userAccountService.refundConsumedCredits(task.getUserId(), task.getReservedCredits());
+            userAccountService.refundConsumedCredits(task.getUserId(), task.getReservedCredits(), task.getId());
             task.setCreditStatus(GenerationCreditStatus.RELEASED.name());
             return;
         }
         if (creditStatus == GenerationCreditStatus.RESERVED) {
-            userAccountService.releaseReservedCredits(task.getUserId(), task.getReservedCredits());
+            userAccountService.releaseReservedCredits(task.getUserId(), task.getReservedCredits(), task.getId());
             task.setCreditStatus(GenerationCreditStatus.RELEASED.name());
         }
     }
