@@ -28,7 +28,8 @@ public class PaymentController {
 
     @PostMapping("/iap/verify")
     public ResponseEntity<ApiResponse<VerifyIapResponse>> verifyIap(@Valid @RequestBody VerifyIapRequest request) {
-        return ResponseEntity.ok(ApiResponse.ok(paymentService.verify(request), TraceIdContext.currentTraceId()));
+        AuthenticatedUser currentUser = currentUserContext.requireCurrentUser();
+        return ResponseEntity.ok(ApiResponse.ok(paymentService.verify(currentUser.userId(), request), TraceIdContext.currentTraceId()));
     }
 
     @GetMapping("/credits/balance")

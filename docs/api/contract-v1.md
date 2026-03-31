@@ -8,7 +8,7 @@ The current implementation keeps the URL, method, core DTOs, and response envelo
 - Content type: `application/json`
 - Authentication: bearer token in `Authorization: Bearer <token>`
 - Idempotent create endpoints may send `Idempotency-Key`
-- Public endpoints remain open for bootstrap, auth, template browsing, upload policy, generation create/detail, and IAP verify.
+- Public endpoints remain open for bootstrap, auth, template browsing, upload policy, and generation create/detail.
 - Protected endpoints now require a valid access token. Missing or invalid bearer token returns `401`; authenticated but disallowed access returns `403`.
 - Email login and Apple login now create or reuse a persisted user record on the server side.
 - Generation tasks are now persisted. Authenticated requests are attached to the current user; anonymous requests remain queryable by task ID but are not included in protected history APIs.
@@ -17,6 +17,7 @@ The current implementation keeps the URL, method, core DTOs, and response envelo
 - Mock provider dispatch and webhook skeleton are now available for end-to-end integration testing.
 - Media handling now uses managed object keys. Public APIs return resolved URLs while internal/provider flows may pass storage object keys.
 - Source uploads, generated assets, and provider callbacks are now persisted as metadata/audit records for traceability.
+- IAP verification now requires authentication, persists orders, grants credits, and treats `transactionId` as an idempotency key.
 
 ## Response envelope
 
@@ -64,6 +65,7 @@ Error:
 - `DELETE /api/history/{id}`
 - `GET /api/credits/balance`
 - `POST /api/account/delete`
+- `POST /api/iap/verify`
 
 ## Domain enums
 - `GenerationStatus`: `CREATED`, `AUDITING`, `READY_TO_DISPATCH`, `RUNNING`, `POST_PROCESSING`, `SUCCESS`, `FAILED`, `REFUNDED`
@@ -275,6 +277,9 @@ Response fields:
 - deletes are implemented as a soft-delete flag on the persisted task
 
 ### POST `/api/iap/verify`
+Authentication:
+- access token required
+
 Request fields:
 - `productId`: string, required
 - `transactionId`: string, required
@@ -285,6 +290,10 @@ Response fields:
 - `status`
 - `creditsGranted`
 - `balanceAfter`
+
+Behavior:
+- persists a verified IAP order per unique `transactionId`
+- repeated verification of the same `transactionId` for the same user returns the existing order without granting credits twice
 
 ### GET `/api/credits/balance`
 Authentication:

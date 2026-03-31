@@ -117,6 +117,17 @@ public class UserAccountService {
         user.setUpdatedAt(Instant.now());
     }
 
+    @Transactional
+    public int grantCredits(String userId, int credits) {
+        if (credits <= 0) {
+            return requireActiveUser(userId).getAvailableCredits();
+        }
+        AppUserEntity user = requireActiveUser(userId);
+        user.setAvailableCredits(user.getAvailableCredits() + credits);
+        user.setUpdatedAt(Instant.now());
+        return user.getAvailableCredits();
+    }
+
     private UserLoginResult findOrCreateUser(String provider, String externalSubject, String email) {
         return userRepository.findByProviderAndExternalSubject(provider, externalSubject)
                 .map(user -> {

@@ -40,4 +40,16 @@ public class AuditEventService {
         event.setCreatedAt(Instant.now());
         auditEventRepository.save(event);
     }
+
+    @Transactional
+    public void recordUser(String eventType, String actorType, String userId, String payload) {
+        AuditEventEntity event = new AuditEventEntity();
+        event.setId("audit_" + UUID.randomUUID().toString().replace("-", ""));
+        event.setEventType(eventType);
+        event.setActorType(actorType);
+        event.setUserId(userId);
+        event.setPayload(payload);
+        event.setCreatedAt(Instant.now());
+        auditEventRepository.save(event);
+    }
 }

@@ -11,6 +11,8 @@ import com.company.emoji.user.AccountCleanupJobRepository;
 import com.company.emoji.user.UserRepository;
 import com.company.emoji.user.entity.AccountCleanupJobEntity;
 import com.company.emoji.user.entity.AppUserEntity;
+import com.company.emoji.payment.IapOrderRepository;
+import com.company.emoji.payment.entity.IapOrderEntity;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -62,6 +64,9 @@ class EmojiApplicationTests {
 
     @Autowired
     private MediaAssetRepository mediaAssetRepository;
+
+    @Autowired
+    private IapOrderRepository iapOrderRepository;
 
     @Autowired
     private AuditEventRepository auditEventRepository;
@@ -235,6 +240,94 @@ class EmojiApplicationTests {
                 .andExpect(jsonPath("$.data.availableCredits").value(321))
                 .andExpect(jsonPath("$.data.frozenCredits").value(12))
                 .andExpect(jsonPath("$.data.currency").value("CREDITS"));
+    }
+
+    @Test
+    void verifyIapShouldRequireAuthenticatedUser() throws Exception {
+        mockMvc.perform(post("/api/iap/verify")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "productId": "credits_120",
+                                  "transactionId": "txn-auth-required",
+                                  "receiptData": "receipt-demo"
+                                }
+                                """))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
+    }
+
+    @Test
+    void verifyIapShouldPersistOrderAndGrantCredits() throws Exception {
+        persistUser(CURRENT_USER_ID, "EMAIL", CURRENT_USER_EMAIL, 240, 0, "ACTIVE");
+
+        mockMvc.perform(post("/api/iap/verify")
+                        .header("Authorization", bearerToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "productId": "credits_120",
+                                  "transactionId": "txn-success-120",
+                                  "receiptData": "receipt-success-120"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.status").value("VERIFIED"))
+                .andExpect(jsonPath("$.data.creditsGranted").value(120))
+                .andExpect(jsonPath("$.data.balanceAfter").value(360));
+
+        IapOrderEntity order = iapOrderRepository.findByTransactionId("txn-success-120").orElseThrow();
+        assertThat(order.getUserId()).isEqualTo(CURRENT_USER_ID);
+        assertThat(order.getProductId()).isEqualTo("credits_120");
+        assertThat(order.getStatus()).isEqualTo("VERIFIED");
+        assertThat(order.getBalanceAfter()).isEqualTo(360);
+
+        AppUserEntity user = userRepository.findById(CURRENT_USER_ID).orElseThrow();
+        assertThat(user.getAvailableCredits()).isEqualTo(360);
+        assertThat(auditEventRepository.findAllByUserIdOrderByCreatedAtAsc(CURRENT_USER_ID))
+                .extracting(AuditEventEntity::getEventType)
+                .contains("IAP_VERIFIED");
+    }
+
+    @Test
+    void verifyIapShouldBeIdempotentByTransactionId() throws Exception {
+        persistUser(CURRENT_USER_ID, "EMAIL", CURRENT_USER_EMAIL, 240, 0, "ACTIVE");
+
+        mockMvc.perform(post("/api/iap/verify")
+                        .header("Authorization", bearerToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "productId": "credits_120",
+                                  "transactionId": "txn-replay-120",
+                                  "receiptData": "receipt-replay-120"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.balanceAfter").value(360));
+
+        MvcResult replayResult = mockMvc.perform(post("/api/iap/verify")
+                        .header("Authorization", bearerToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "productId": "credits_120",
+                                  "transactionId": "txn-replay-120",
+                                  "receiptData": "receipt-replay-120"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.balanceAfter").value(360))
+                .andReturn();
+
+        String orderId = responseValue(replayResult, "/data/orderId");
+        assertThat(iapOrderRepository.findByTransactionId("txn-replay-120")).hasValueSatisfying(order -> assertThat(order.getId()).isEqualTo(orderId));
+        assertThat(userRepository.findById(CURRENT_USER_ID).orElseThrow().getAvailableCredits()).isEqualTo(360);
+        assertThat(auditEventRepository.findAllByUserIdOrderByCreatedAtAsc(CURRENT_USER_ID))
+                .extracting(AuditEventEntity::getEventType)
+                .contains("IAP_VERIFIED", "IAP_VERIFY_REPLAYED");
     }
 
     @Test
