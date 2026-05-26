@@ -116,13 +116,16 @@ class EmojiApplicationTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.objectKey").value(org.hamcrest.Matchers.startsWith("emoji/source/")))
-                .andExpect(jsonPath("$.data.uploadUrl").value(org.hamcrest.Matchers.startsWith("https://files.example.com/emoji/source/")))
+                .andExpect(jsonPath("$.data.uploadUrl").value(org.hamcrest.Matchers.startsWith("https://uploads.example.com/emoji/source/")))
                 .andExpect(jsonPath("$.data.headers.Content-Type").value("image/png"))
+                .andExpect(jsonPath("$.data.headers.X-Emoji-Storage-Signature").value(org.hamcrest.Matchers.matchesPattern("[0-9a-f]{64}")))
+                .andExpect(jsonPath("$.data.headers.X-Emoji-Storage-Expires-At").isString())
                 .andReturn();
 
         String objectKey = responseValue(result, "/data/objectKey");
         MediaAssetEntity asset = mediaAssetRepository.findByObjectKey(objectKey).orElseThrow();
         assertThat(asset.getAssetRole()).isEqualTo("SOURCE");
+        assertThat(asset.getPublicUrl()).startsWith("https://files.example.com/emoji/source/");
         assertThat(asset.getSourceStatus()).isEqualTo("POLICY_ISSUED");
     }
 

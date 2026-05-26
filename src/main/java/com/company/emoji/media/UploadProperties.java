@@ -7,11 +7,13 @@ import java.util.List;
 @ConfigurationProperties(prefix = "app.media")
 public record UploadProperties(
         String publicUploadBaseUrl,
+        String signedUploadBaseUrl,
         String uploadPathPrefix,
         String sourcePathPrefix,
         String previewPathPrefix,
         String resultPathPrefix,
         List<String> allowedContentTypes,
-        int uploadExpiresInSeconds
+        int uploadExpiresInSeconds,
+        String uploadSigningSecret
 ) {
 }

@@ -4,24 +4,28 @@ import com.company.emoji.common.api.ApiErrorCode;
 import com.company.emoji.common.api.ApiException;
 import com.company.emoji.media.dto.UploadPolicyRequest;
 import com.company.emoji.media.dto.UploadPolicyResponse;
+import com.company.emoji.media.storage.SignedUploadPolicy;
+import com.company.emoji.media.storage.StorageUploadSigner;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 @Service
 public class MediaAssetService {
     private final UploadProperties uploadProperties;
+    private final StorageUploadSigner storageUploadSigner;
 
-    public MediaAssetService(UploadProperties uploadProperties) {
+    public MediaAssetService(UploadProperties uploadProperties, StorageUploadSigner storageUploadSigner) {
         this.uploadProperties = uploadProperties;
+        this.storageUploadSigner = storageUploadSigner;
     }
 
     public UploadPolicyResponse createUploadPolicy(UploadPolicyRequest request) {
         validateContentType(request.contentType());
+        int expiresInSeconds = uploadProperties.uploadExpiresInSeconds();
         String sanitizedFileName = sanitizeFileName(request.fileName());
         String extension = extractExtension(sanitizedFileName);
         String objectKey = joinPath(
@@ -30,13 +34,14 @@ public class MediaAssetService {
                 LocalDate.now().toString(),
                 UUID.randomUUID() + extension
         );
+        SignedUploadPolicy signedPolicy = storageUploadSigner.signPut(objectKey, request.contentType(), expiresInSeconds);
 
         return new UploadPolicyResponse(
                 objectKey,
-                toPublicUrl(objectKey),
-                "PUT",
-                Map.of("Content-Type", request.contentType()),
-                uploadProperties.uploadExpiresInSeconds()
+                signedPolicy.uploadUrl(),
+                signedPolicy.method(),
+                signedPolicy.headers(),
+                expiresInSeconds
         );
     }
 

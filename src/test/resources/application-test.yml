@@ -36,6 +36,8 @@ app:
     generation-poll-seconds: 5
   media:
     public-upload-base-url: https://files.example.com
+    signed-upload-base-url: https://uploads.example.com
+    upload-signing-secret: test-upload-signing-secret
     upload-path-prefix: emoji
     source-path-prefix: source
     preview-path-prefix: generated/previews

@@ -13,3 +13,4 @@ app:
     fixed-email-code-for-dev: 123456
   media:
     public-upload-base-url: http://localhost:9000/mock-upload
+    signed-upload-base-url: http://localhost:9000/mock-upload

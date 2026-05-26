@@ -171,8 +171,11 @@ Response fields:
 - `expiresInSeconds`
 
 Behavior:
-- validates `contentType` against the configured allow-list
-- returns a managed source object key under the upload prefix
+- 根据配置的 allow-list 校验 `contentType`
+- 返回 upload prefix 下的 managed source object key
+- `uploadUrl` 由 `app.media.signed-upload-base-url` 生成，用于客户端直传
+- `headers` 包含 `Content-Type`、`X-Emoji-Storage-Expires-At`、`X-Emoji-Storage-Signature`
+- 持久化的 media metadata 使用 `app.media.public-upload-base-url` 生成公开资源 URL
 
 ### POST `/api/generations`
 Headers:
