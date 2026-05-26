@@ -1,9 +1,10 @@
 package com.company.emoji.template;
 
+import com.company.emoji.audit.AuditEventService;
 import com.company.emoji.common.api.ApiErrorCode;
 import com.company.emoji.common.api.ApiException;
-import com.company.emoji.template.dto.TemplateDetailResponse;
 import com.company.emoji.template.dto.InternalTemplateUpdateRequest;
+import com.company.emoji.template.dto.TemplateDetailResponse;
 import com.company.emoji.template.dto.TemplateSummaryResponse;
 import com.company.emoji.template.entity.StyleTemplateEntity;
 import org.springframework.http.HttpStatus;
@@ -17,9 +18,11 @@ import java.time.Instant;
 @Service
 public class TemplateService {
     private final TemplateRepository templateRepository;
+    private final AuditEventService auditEventService;
 
-    public TemplateService(TemplateRepository templateRepository) {
+    public TemplateService(TemplateRepository templateRepository, AuditEventService auditEventService) {
         this.templateRepository = templateRepository;
+        this.auditEventService = auditEventService;
     }
 
     public List<TemplateSummaryResponse> listTemplates() {
@@ -64,7 +67,13 @@ public class TemplateService {
             template.setPriceCredits(request.priceCredits());
         }
         template.setUpdatedAt(Instant.now());
-        return getTemplate(templateRepository.save(template).getId());
+        TemplateDetailResponse response = getTemplate(templateRepository.save(template).getId());
+        auditEventService.recordAdmin(
+                "TEMPLATE_UPDATED",
+                "SYSTEM",
+                "templateId=" + id + ";enabled=" + response.enabled() + ";priceCredits=" + response.priceCredits()
+        );
+        return response;
     }
 
     private List<String> splitCsv(String value) {

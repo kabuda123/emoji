@@ -17,39 +17,39 @@ public class AuditEventService {
 
     @Transactional
     public void record(String eventType, String actorType, String generationTaskId, String providerTaskId, String payload) {
-        AuditEventEntity event = new AuditEventEntity();
-        event.setId("audit_" + UUID.randomUUID().toString().replace("-", ""));
-        event.setEventType(eventType);
-        event.setActorType(actorType);
+        AuditEventEntity event = newEvent(eventType, actorType, payload);
         event.setGenerationTaskId(generationTaskId);
         event.setProviderTaskId(providerTaskId);
-        event.setPayload(payload);
-        event.setCreatedAt(Instant.now());
         auditEventRepository.save(event);
     }
 
     @Transactional
     public void recordCleanup(String eventType, String actorType, String userId, String cleanupJobId, String payload) {
-        AuditEventEntity event = new AuditEventEntity();
-        event.setId("audit_" + UUID.randomUUID().toString().replace("-", ""));
-        event.setEventType(eventType);
-        event.setActorType(actorType);
+        AuditEventEntity event = newEvent(eventType, actorType, payload);
         event.setUserId(userId);
         event.setCleanupJobId(cleanupJobId);
-        event.setPayload(payload);
-        event.setCreatedAt(Instant.now());
         auditEventRepository.save(event);
     }
 
     @Transactional
     public void recordUser(String eventType, String actorType, String userId, String payload) {
+        AuditEventEntity event = newEvent(eventType, actorType, payload);
+        event.setUserId(userId);
+        auditEventRepository.save(event);
+    }
+
+    @Transactional
+    public void recordAdmin(String eventType, String actorType, String payload) {
+        auditEventRepository.save(newEvent(eventType, actorType, payload));
+    }
+
+    private AuditEventEntity newEvent(String eventType, String actorType, String payload) {
         AuditEventEntity event = new AuditEventEntity();
         event.setId("audit_" + UUID.randomUUID().toString().replace("-", ""));
         event.setEventType(eventType);
         event.setActorType(actorType);
-        event.setUserId(userId);
         event.setPayload(payload);
         event.setCreatedAt(Instant.now());
-        auditEventRepository.save(event);
+        return event;
     }
 }

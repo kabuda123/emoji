@@ -363,18 +363,21 @@ Request fields:
 Behavior:
 - updates the target template's enabled state and/or credit price
 - changes are persisted and reflected in public template endpoints
+- writes a `TEMPLATE_UPDATED` audit event
 
 ### GET `/api/internal/admin/config/bootstrap`
 Authentication:
 - internal header `X-Internal-Token` required
 
 Behavior:
-- returns the effective bootstrap config, including runtime overrides
+- returns the effective bootstrap config, including persisted overrides
 
 ### POST `/api/internal/admin/config/bootstrap`
 Authentication:
 - internal header `X-Internal-Token` required
 
 Behavior:
-- applies runtime-only bootstrap overrides for internal management and test operation
+- applies bootstrap overrides for internal management and test operation
+- persists overrides in `bootstrap_config_override`, so they survive service restart
 - changes are reflected immediately in public `/api/config/bootstrap`
+- writes a `BOOTSTRAP_CONFIG_UPDATED` audit event

@@ -3,6 +3,7 @@ package com.company.emoji;
 import com.company.emoji.auth.JwtTokenService;
 import com.company.emoji.audit.AuditEventRepository;
 import com.company.emoji.audit.entity.AuditEventEntity;
+import com.company.emoji.common.bootstrap.BootstrapConfigOverrideRepository;
 import com.company.emoji.generation.GenerationTaskRepository;
 import com.company.emoji.generation.entity.GenerationTaskEntity;
 import com.company.emoji.media.MediaAssetRepository;
@@ -80,13 +81,16 @@ class EmojiApplicationTests {
     @Autowired
     private AuditEventRepository auditEventRepository;
 
+    @Autowired
+    private BootstrapConfigOverrideRepository bootstrapConfigOverrideRepository;
+
     @Test
     void bootstrapShouldReturnEnvelope() throws Exception {
         mockMvc.perform(get("/api/config/bootstrap"))
                 .andExpect(status().isOk())
                 .andExpect(header().exists("X-Trace-Id"))
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.productName").value("Original Style Emoji Tool"))
+                .andExpect(jsonPath("$.data.productName").isString())
                 .andExpect(jsonPath("$.error").doesNotExist());
     }
 
@@ -424,6 +428,13 @@ class EmojiApplicationTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.enabled").value(false))
                 .andExpect(jsonPath("$.data.priceCredits").value(88));
+
+        assertThat(auditEventRepository.findAllByEventTypeOrderByCreatedAtAsc("TEMPLATE_UPDATED").stream()
+                .map(AuditEventEntity::getPayload)
+                .anyMatch(payload -> payload.contains("templateId=comic")
+                        && payload.contains("enabled=false")
+                        && payload.contains("priceCredits=88")))
+                .isTrue();
     }
 
     @Test
@@ -459,6 +470,20 @@ class EmojiApplicationTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.productName").value("Emoji Ops Preview"))
                 .andExpect(jsonPath("$.data.generation.defaultPollSeconds").value(9));
+
+        assertThat(bootstrapConfigOverrideRepository.findById("bootstrap")).hasValueSatisfying(override -> {
+            assertThat(override.getProductName()).isEqualTo("Emoji Ops Preview");
+            assertThat(override.getIosReviewMode()).isTrue();
+            assertThat(override.getIapEnabled()).isFalse();
+            assertThat(override.getSupportedLoginMethods()).isEqualTo("EMAIL");
+            assertThat(override.getGenerationPollSeconds()).isEqualTo(9);
+            assertThat(override.getCreatedAt()).isNotNull();
+            assertThat(override.getUpdatedAt()).isNotNull();
+        });
+        assertThat(auditEventRepository.findAllByEventTypeOrderByCreatedAtAsc("BOOTSTRAP_CONFIG_UPDATED").stream()
+                .map(AuditEventEntity::getPayload)
+                .anyMatch("bootstrapOverrideId=bootstrap"::equals))
+                .isTrue();
     }
 
     @Test

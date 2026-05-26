@@ -9,4 +9,5 @@ public interface AuditEventRepository extends JpaRepository<AuditEventEntity, St
     List<AuditEventEntity> findAllByGenerationTaskIdOrderByCreatedAtAsc(String generationTaskId);
     List<AuditEventEntity> findAllByCleanupJobIdOrderByCreatedAtAsc(String cleanupJobId);
     List<AuditEventEntity> findAllByUserIdOrderByCreatedAtAsc(String userId);
+    List<AuditEventEntity> findAllByEventTypeOrderByCreatedAtAsc(String eventType);
 }
