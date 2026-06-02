@@ -264,7 +264,7 @@ private final class MockPurchaseService: StoreKitPurchasing {
 
     func transactionUpdates(productIDs: [String]) -> AsyncStream<StoreKitVerifiedTransaction> {
         updateProductIDs.append(productIDs)
-        AsyncStream { continuation in
+        return AsyncStream { continuation in
             for transaction in queuedTransactionUpdates {
                 continuation.yield(transaction)
             }
