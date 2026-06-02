@@ -76,7 +76,6 @@ jobs:
             -configuration Debug \
             -destination "$IOS_SIM_DESTINATION" \
             -derivedDataPath "$DERIVED_DATA_PATH" \
-            CODE_SIGNING_ALLOWED=NO \
             build
 
       - name: Run XCTest on iOS Simulator
@@ -87,8 +86,7 @@ jobs:
             -scheme "$XCODE_SCHEME" \
             -configuration Debug \
             -destination "$IOS_SIM_DESTINATION" \
-            -derivedDataPath "$DERIVED_DATA_PATH" \
-            CODE_SIGNING_ALLOWED=NO
+            -derivedDataPath "$DERIVED_DATA_PATH"
 
       - name: Build Release for iOS SDK
         run: |
