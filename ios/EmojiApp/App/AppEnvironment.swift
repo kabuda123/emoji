@@ -13,10 +13,11 @@ final class AppEnvironment: ObservableObject {
 
     init(
         apiClient: APIClient = APIClient(),
-        sessionStore: SessionStore = SessionStore(),
+        sessionStore: SessionStore? = nil,
         appleSignInService: AppleSignInService = AppleSignInService(),
         storeKitPurchaseService: StoreKitPurchasing = StoreKitPurchaseService()
     ) {
+        let sessionStore = sessionStore ?? SessionStore()
         self.apiClient = apiClient
         self.sessionStore = sessionStore
         self.appleSignInService = appleSignInService
