@@ -32,7 +32,7 @@ jobs:
     env:
       XCODE_PROJECT: EmojiApp.xcodeproj
       XCODE_SCHEME: EmojiApp
-      DERIVED_DATA_PATH: ${{ runner.temp }}/EmojiAppDerivedData
+      DERIVED_DATA_PATH: /tmp/EmojiAppDerivedData
 
     steps:
       - name: Checkout
